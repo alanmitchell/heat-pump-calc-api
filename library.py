@@ -101,14 +101,21 @@ def tmy_from_id(tmy_id):
     result = {}
     df_records = get_df(f'tmy3/{tmy_id}.pkl')
     result['records'] = df_records.to_dict(orient='records')
-    result['site_info'] = df_tmy_meta.loc[tmy_id]
+    result['site_info'] = df_tmy_meta.loc[tmy_id].to_dict()
+    result['site_info']['tmy_id'] = tmy_id
     return result
 
-def heating_design_temp(tmy_id):
-    """Returns the heating design temperature (deg F) for the TMY3 site
-    identified by 'tmy_id'.
+def tmys():
+    """Returns a list of available TMY sites and associated info.
     """
-    return df_tmy_meta.loc[tmy_id].heating_design_temp
+    return df_tmy_meta.reset_index().to_dict(orient='records')
+
+def tmy_meta(tmy_id):
+    """Returns the metadata for the TMY3 site identified by 'tmy_id'.
+    """
+    result = df_tmy_meta.loc[tmy_id].to_dict()
+    result['tmy_id'] = tmy_id
+    return result
     
 def refresh_data():
     """Key datasets are read in here and placed in module-level variables,

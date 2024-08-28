@@ -35,10 +35,15 @@ async def fuels():
 async def fuel(fuel_id: int):
     return loads(dumps(library.fuel_from_id(fuel_id), ignore_nan=True))
 
+@app.get("/tmys")
+async def tmys():
+    return {'records': library.tmys()}
+
 @app.get("/tmy/{tmy_id}")
 async def tmy(tmy_id: int):
-    return {'records': library.tmy_from_id(tmy_id)}
+    return library.tmy_from_id(tmy_id)
 
-@app.get("/heating-design-temp/{tmy_id}")
-async def heating_design_temp(tmy_id: int):
-    return {'value': library.heating_design_temp(tmy_id)}
+@app.get("/tmy-meta/{tmy_id}")
+async def tmy_meta(tmy_id: int):
+    return library.tmy_meta(tmy_id)
+
