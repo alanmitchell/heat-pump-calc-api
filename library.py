@@ -8,13 +8,11 @@ See the bottom is file for documentation of those datasets.
 """
 import os
 import io
-import math
 import functools
 import urllib
 import time
 
 import pandas as pd
-import numpy as np
 import requests
 
 # Most of the data files are located remotely and are retrieved via

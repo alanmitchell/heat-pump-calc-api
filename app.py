@@ -1,5 +1,8 @@
 from fastapi import FastAPI
-from . import library
+try:
+    import library
+except:
+    from . import library
 from simplejson import dumps, loads
 
 app = FastAPI()
