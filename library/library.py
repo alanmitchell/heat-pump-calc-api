@@ -93,30 +93,24 @@ def fuel_from_id(fuel_id):
     """
     return df_fuel.loc[fuel_id].to_dict()
 
-@functools.lru_cache(maxsize=50)    # caches the TMY dataframes cuz retrieved remotely
-def tmy_from_id(tmy_id):
-    """Returns a list of TMY hourly records and meta data for the climate site identified
-    by 'tmy_id'.
-    """
-    result = {}
-    df_records = get_df(f'tmy3/{tmy_id}.pkl')
-    result['records'] = df_records.to_dict(orient='records')
-    result['site_info'] = df_tmy_meta.loc[tmy_id].to_dict()
-    result['site_info']['tmy_id'] = tmy_id
-    return result
-
 def tmys():
     """Returns a list of available TMY sites and associated info.
     """
     return df_tmy_meta.reset_index().to_dict(orient='records')
 
-def tmy_meta(tmy_id):
-    """Returns the metadata for the TMY3 site identified by 'tmy_id'.
+@functools.lru_cache(maxsize=50)    # caches the TMY dataframes cuz retrieved remotely
+def tmy_from_id(tmy_id, site_info_only=False):
+    """Returns a list of TMY hourly records and meta data for the climate site identified
+    by 'tmy_id'.
     """
-    result = df_tmy_meta.loc[tmy_id].to_dict()
-    result['tmy_id'] = tmy_id
+    result = {}
+    if not site_info_only:
+        df_records = get_df(f'tmy3/{tmy_id}.pkl')
+        result['records'] = df_records.to_dict(orient='records')
+    result['site_info'] = df_tmy_meta.loc[tmy_id].to_dict()
+    result['site_info']['tmy_id'] = tmy_id
     return result
-    
+   
 def refresh_data():
     """Key datasets are read in here and placed in module-level variables,
     listed below this function.
