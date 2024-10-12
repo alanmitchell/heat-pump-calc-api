@@ -11,9 +11,22 @@ import io
 import functools
 import urllib
 import time
+from typing import List
 
 import pandas as pd
 import requests
+from simplejson import dumps, loads
+
+from models.general import Choice
+from library.models import (
+    City, 
+    Utility, 
+    Fuel, 
+    FuelPrice, 
+    TMYmeta, 
+    TMYhourlyRec, 
+    TMYdataset
+)
 
 # Most of the data files are located remotely and are retrieved via
 # an HTTP request.  The function below is used to retrieve the files,
@@ -42,75 +55,95 @@ def get_df(file_path):
 # -----------------------------------------------------------------
 # Functions to provide the library data to the rest of the
 # application.
-def cities():
+def cities() -> List[Choice]:
     """List of all (city name, city ID), alphabetically sorted.  
     """
     city_list = list(zip(df_city.Name, df_city.index))
     city_list.sort()   # sorts in place; returns None
-    return city_list
+    return [Choice(label=label, id=id) for label, id in city_list]
 
-def city_from_id(city_id):
+def city_from_id(city_id) -> City:
     """Returns a dictionary containing the city information for the City
     identified by 'city_id'. 
     """
-    return df_city.loc[city_id].to_dict()
+    city_dict = df_city.loc[city_id].to_dict()
+    # turn utility list into list of Choice items
+    city_dict['ElecUtilities'] = [{'label': label, 'id': id} for label, id in city_dict['ElecUtilities']]
+    # do the following to replace NaN's with None
+    city_dict = loads(dumps(city_dict, ignore_nan=True))
+    return City(**city_dict)
 
-def fuel_price(fuel_id, city_id):
+# --------------------------------------------------------------------------------------
+
+def utilities() -> List[Choice]:
+    """List of all utility rate structures, sorted by utility rate name.
+    """
+    util_list =  list(zip(df_util.Name, df_util.index))
+    util_list.sort()
+    return [Choice(label=label, id=id) for label, id in util_list]
+
+def util_from_id(util_id) -> Utility:
+    """Returns a dictionary containing all of the Utility information for
+    the Utility identified by util_id.
+    """
+    return_dict = loads(dumps(df_util.loc[util_id].to_dict(), ignore_nan=True))
+    return Utility(**return_dict)
+
+# --------------------------------------------------------------------------------------
+
+def fuels() -> List[Choice]:
+    """Returns a list of fuel names and IDs.
+    """
+    fuel_list = list(zip(df_fuel.desc, df_fuel.index))
+    return [Choice(label=label, id=id) for label, id in fuel_list]
+
+def fuel_from_id(fuel_id) -> Fuel:
+    """Returns fuel information for the fuel with
+    and ID of 'fuel_id'
+    """
+    return_dict = loads(dumps(df_fuel.loc[fuel_id].to_dict(), ignore_nan=True))
+    return Fuel(**return_dict)
+
+def fuel_price(fuel_id, city_id) -> FuelPrice:
     """Returns the fuel price for the fuel identified by the ID of 
     'fuel_id' for the city identified by 'city_id'.
     """
     city = df_city.loc[city_id]
+    city_name = city.Name
     fuel = df_fuel.loc[fuel_id]
+    fuel_name = fuel.desc
     if type(fuel.price_col) == str:
-        return city[fuel.price_col]
+        price = city[fuel.price_col]
     else:
         # Price column is a NaN and not present for electricity
-        return None
+        price = None
 
-def utilities():
-    """List of all (utility rate name, utility ID) for all utility rate
-    structures, sorted by utility rate name.
-    """
-    util_list =  list(zip(df_util.Name, df_util.index))
-    util_list.sort()
-    return util_list
+    return_dict = loads(dumps({'city': city_name, 'fuel': fuel_name, 'price': price}, ignore_nan=True))
+    return FuelPrice(**return_dict)
 
-def util_from_id(util_id):
-    """Returns a dictionary containing all of the Utility information for
-    the Utility identified by util_id.
-    """
-    return df_util.loc[util_id].to_dict()
+# --------------------------------------------------------------------------------------
 
-def fuels():
-    """Returns a list of (fuel name, fuel ID) for all fuels.
-    """
-    fuel_list = list(zip(df_fuel.desc, df_fuel.index))
-    return fuel_list
-
-def fuel_from_id(fuel_id):
-    """Returns a dictionary of fuel information for the fuel with
-    and ID of 'fuel_id'
-    """
-    return df_fuel.loc[fuel_id].to_dict()
-
-def tmys():
+def tmys() -> List[TMYmeta]:
     """Returns a list of available TMY sites and associated info.
     """
-    return df_tmy_meta.reset_index().to_dict(orient='records')
+    return [TMYmeta(**rec) for rec in df_tmy_meta.reset_index().to_dict(orient='records')]
 
 @functools.lru_cache(maxsize=50)    # caches the TMY dataframes cuz retrieved remotely
-def tmy_from_id(tmy_id, site_info_only=False):
+def tmy_from_id(tmy_id, site_info_only=False) -> TMYdataset:
     """Returns a list of TMY hourly records and meta data for the climate site identified
     by 'tmy_id'.
     """
-    result = {}
+    site_info = TMYmeta(tmy_id=tmy_id, **df_tmy_meta.loc[tmy_id].to_dict())
     if not site_info_only:
         df_records = get_df(f'tmy3/{tmy_id}.pkl')
-        result['records'] = df_records.to_dict(orient='records')
-    result['site_info'] = df_tmy_meta.loc[tmy_id].to_dict()
-    result['site_info']['tmy_id'] = tmy_id
-    return result
-   
+        df_records['hour'] = list(range(0, 24)) * 365
+        recs = [TMYhourlyRec(**rec) for rec in df_records.to_dict(orient='records')]
+        return TMYdataset(site_info=site_info, records=recs)
+    else:
+        return TMYdataset(site_info=site_info)
+
+# --------------------------------------------------------------------------------------
+
 def refresh_data():
     """Key datasets are read in here and placed in module-level variables,
     listed below this function.
@@ -132,9 +165,15 @@ def refresh_data():
 
     # Read in the other City and Utility Excel files.
     df_city = get_df('city.pkl')
+    # Need to add an empty column for the price of Wood Pellets
+    df_city['WoodPelletsPrice'] = float('nan')
 
     # Retrive the list of utilities
     df_util = get_df('utility.pkl')
+    # Only keep the ones that are Active and not Test objects.
+    df_util = df_util.query('Active == 1 and IsTestObject == 0').copy()
+    # drop unneeded columns
+    df_util.drop(columns=['Active', 'IsTestObject', 'NameShort'], inplace=True)
 
     # Retrieve the Fuel characteristics, modify into better format, and store in a DataFrame
 
