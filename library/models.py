@@ -3,7 +3,7 @@
 from typing import List, Tuple, Optional
 from pydantic import BaseModel
 
-from models.general import Choice
+from general.models import Choice
 
 class City(BaseModel):
     """Information about one city.

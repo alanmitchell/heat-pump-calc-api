@@ -1,11 +1,10 @@
 """Defines the API for the Library functions."""
 from typing import List
 
-from simplejson import dumps, loads
 from fastapi import APIRouter
 
 from . import library as lib
-from models.general import Choice
+from general.models import Choice
 from library.models import (
     City, 
     Utility, 

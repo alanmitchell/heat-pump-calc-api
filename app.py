@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from starlette.staticfiles import StaticFiles
 
 import library.api_router
-from models.general import Version
+from general.models import Version
 
 VERSION = '0.1'
 VERSION_DATE = '2024-10-11'

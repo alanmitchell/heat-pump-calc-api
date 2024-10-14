@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from library import library as lib
 from . import constants
-from utility.utils import chg_nonnum
+from general.utils import chg_nonnum
 
 def temp_depression(ua_per_ft2, 
                     balance_point, 

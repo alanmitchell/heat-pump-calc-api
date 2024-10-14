@@ -17,7 +17,7 @@ import pandas as pd
 import requests
 from simplejson import dumps, loads
 
-from models.general import Choice
+from general.models import Choice
 from library.models import (
     City, 
     Utility, 
