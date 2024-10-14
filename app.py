@@ -8,29 +8,35 @@ VERSION = '0.1'
 VERSION_DATE = '2024-10-11'
 
 description = """
-The Alaska Heat Pump Calculator API allows to model heat pump performance
+The Alaska Heat Pump Calculator API allows for modeling of heat pump performance
 and economics in Alaskan communities. The API also allows for retrieval of fuel
 and climate information for Alaskan communities.  The basic community information
 is available through the /lib/* API endpoints.
 """
-app = FastAPI(
-    title="Alaska Heat Pump Calculator API",
-    description=description,
-    version = VERSION
-)
 
 tags_metadata = [
     {
-        "name": "version",
-        "description": "Retrieves API version information",
+        "name": "General",
+        "description": "General API information",
+    },
+    {
+        "name": "Library",
+        "description": "Alaskan Community and Fuel information.",
     },
 ]
+
+app = FastAPI(
+    title="Alaska Heat Pump Calculator API",
+    description=description,
+    version = VERSION,
+    openapi_tags=tags_metadata
+)
 
 @app.get("/", include_in_schema=False)
 async def root():
     return {"message": "Hello from the Alaska Heat Pump Calculator API!"}
 
-@app.get("/version", response_model=Version, tags=['version'])
+@app.get("/version", response_model=Version, tags=['General'])
 async def version() -> Version:
     return Version(version=VERSION, version_date=VERSION_DATE)
 
