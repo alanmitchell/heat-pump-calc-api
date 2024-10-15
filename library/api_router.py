@@ -4,7 +4,7 @@ from typing import List
 from fastapi import APIRouter
 
 from . import library as lib
-from general.models import Choice
+from general.models import Choice, Message
 from library.models import (
     City, 
     Utility, 
@@ -52,3 +52,10 @@ async def tmys() -> List[TMYmeta]:
 @router.get("/lib/tmys/{tmy_id}", response_model=TMYdataset, tags=['Library'])
 async def tmy(tmy_id: int, site_info_only: bool = False) -> TMYdataset:
     return lib.tmy_from_id(tmy_id, site_info_only)
+
+@router.get("/lib/refresh", response_model=Message, tags=['Library'])
+async def refresh() -> Message:
+    lib.refresh_data()
+    return Message(message='Library data has been refreshed.')
+
+

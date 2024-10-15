@@ -7,7 +7,12 @@ class Choice(BaseModel):
     label: str
     id: int
 
+class Message(BaseModel):
+    """Returns a text message."""
+    message: str
+
 class Version(BaseModel):
     """Gives version information for the application"""
     version: str
     version_date: datetime.datetime
+
