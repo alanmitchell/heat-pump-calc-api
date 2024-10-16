@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from starlette.staticfiles import StaticFiles
 
 import library.api_router
+import heat.api_router
 from general.models import Version
 
 VERSION = '0.1'
@@ -23,6 +24,10 @@ tags_metadata = [
         "name": "Library",
         "description": "Alaskan Community and Fuel information.",
     },
+    {
+        "name": "Heating Models",
+        "description": "Space Heating and Heat Pump Models."
+    }
 ]
 
 app = FastAPI(
@@ -46,3 +51,6 @@ app.mount('/static', StaticFiles(directory='static'), name='static')
 # routes that related to the Energy Library database supporting the app, including
 # city, utility, weather, and fuel information.
 app.include_router(library.api_router.router)
+
+# routes to heating and heat pump models.
+app.include_router(heat.api_router.router)
