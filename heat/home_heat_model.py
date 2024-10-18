@@ -311,12 +311,6 @@ def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
     # needed to accurately account for coincident peak demand.
     dfh['total_kwh'] = dfh.hp_kwh + dfh.secondary_kwh
 
-    dfh.to_excel('/home/alan/Downloads/dfh.xlsx')
-
-    # res['val1'] = temps_fit_adj
-    # res['val2'] = cops_fit_adj
-    # res['val3'] = max_hp_output_fit_adj
-
     # Store annual and monthly totals.
     # Annual totals is a Pandas Series.
     total_cols = ['hp_load_mmbtu', 'secondary_load_mmbtu', 'hp_kwh', 'secondary_fuel_mmbtu', 'secondary_kwh', 'total_kwh']
@@ -356,6 +350,8 @@ def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
     # Include monthly and annual results
     res['monthly_results'] = [HeatTimePeriodResults(**row) for row in dfm.to_dict(orient='records')]
     res['annual_results'] = tot.to_dict()
+
+    # dfh.to_excel('/home/alan/Downloads/dfh.xlsx')
 
     return HeatModelResults(**res)
 
