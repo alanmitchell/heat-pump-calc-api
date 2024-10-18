@@ -25,7 +25,7 @@ class TemperatureTolerance(str, Enum):
     med = 'med'          # 5 deg F drop is acceptable
     high = 'high'        # 10 deg F drop is acceptable
 
-# --------------- Pydantic Models
+# --------------- Pydantic Models for Space Heating Models
 
 class HeatPump(BaseModel):
     """Description of a Heat Pump and Operation Strategy"""
@@ -60,10 +60,25 @@ class HeatModelInputs(BaseModel):
     # calculation process. They are given default values.
     ua_true_up: float = 1.0          # used to true up calculation to actual fuel use. Multiplies the UA determined from insulation level.
 
+class HeatTimePeriodResults(BaseModel):
+    period: str                # time period being reported on, e.g. "Jan" for January, "Annual" for full year
+    hp_load_mmbtu: float       # heat load in MMBTU served by heat pump
+    hp_kwh: float              # kWh consumed by heat pump
+    hp_kw_max: float           # max kW demand of heat pump
+    cop: float                 # average heat pump COP for the period
+    secondary_load_mmbtu: float   # heat load in MMBTU served by secondary, conventional, heating system
+    secondary_fuel_mmbtu: float   # fuel consumed by the secondary system in MMBTU
+    secondary_fuel_units: float   # fuel consumed by the secondary system in units of fuel, e,g, 'gallon'
+    secondary_kwh: float          # electricity consumed by secondary system, usually for auxiliaries, but also includes electric heat kWh
+    secondary_kw_max: float       # max electricity used by secondary system in kW
+    total_kwh: float              # total electricity kWh used by heat pump and secondary system
+    total_kw_max: float           # maximum kW coincident demand by heat pump and secondary heating system
+    co2_lbs: float                # CO2 released due to fuel and electricity consumed by both heating systems
+
+
 class HeatModelResults(BaseModel):
     """Space Heat Model results"""
-    val1: float | List[float] = -99.0
-    val2: float | List[float] = -99.0
-    val3: float | List[float] = -99.0
+    monthly_results: List[HeatTimePeriodResults]
+    annual_results: HeatTimePeriodResults
 
 

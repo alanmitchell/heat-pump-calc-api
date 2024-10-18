@@ -7,7 +7,13 @@ import numpy as np
 import pandas as pd
 
 from . import constants
-from .models import HeatModelInputs, HeatModelResults, WallInsulLevel, TemperatureTolerance
+from .models import (
+    HeatModelInputs,
+    HeatTimePeriodResults,
+    HeatModelResults, 
+    WallInsulLevel, 
+    TemperatureTolerance,
+)
 from library import library as lib
 from general.utils import chg_nonnum
 
@@ -311,42 +317,45 @@ def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
     # res['val2'] = cops_fit_adj
     # res['val3'] = max_hp_output_fit_adj
 
-    """
     # Store annual and monthly totals.
     # Annual totals is a Pandas Series.
     total_cols = ['hp_load_mmbtu', 'secondary_load_mmbtu', 'hp_kwh', 'secondary_fuel_mmbtu', 'secondary_kwh', 'total_kwh']
-    s.df_monthly = dfh.groupby('month')[total_cols].sum()
-    dfm = s.df_monthly    # shortcut variable
+    dfm = dfh.groupby('month')[total_cols].sum()
     
     # Add in columns for the peak electrical demand during the month
-    dfm['hp_kw'] = dfh.groupby('month')[['hp_kwh']].max()
-    dfm['secondary_kw'] = dfh.groupby('month')[['secondary_kwh']].max()
-    dfm['total_kw'] = dfh.groupby('month')[['total_kwh']].max()  # can't add the above cuz of coincidence
+    dfm['hp_kw_max'] = dfh.groupby('month')[['hp_kwh']].max()
+    dfm['secondary_kw_max'] = dfh.groupby('month')[['secondary_kwh']].max()
+    dfm['total_kw_max'] = dfh.groupby('month')[['total_kwh']].max()  # can't add the above cuz of coincidence
 
     # physical units for secondary fuel
-    fuel = s.exist_heat_fuel
-    dfm['secondary_fuel_units'] = dfm['secondary_fuel_mmbtu'] / fuel.btus * 1e6
+    fuel = exist_heat_fuel    # shortcut variable
+    dfm['secondary_fuel_units'] = dfm['secondary_fuel_mmbtu'] * 1e6 / fuel.btus
 
     # COP by month
     dfm['cop'] = dfm.hp_load_mmbtu / (dfm.hp_kwh * 0.003412)   
 
     # Total lbs of CO2 per month, counting electricity and fuel
-    dfm['co2_lbs'] = dfm.total_kwh * s.co2_lbs_per_kwh + dfm.secondary_fuel_mmbtu * chg_nonnum(fuel.co2, 0.0)
+    dfm['co2_lbs'] = dfm.total_kwh * inp.co2_lbs_per_kwh + dfm.secondary_fuel_mmbtu * chg_nonnum(fuel.co2, 0.0)
 
-    # Change index to Month labels
-    s.df_monthly.index = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    
-    s.ser_annual = s.df_monthly.sum()
+    # calculate annual totals. this is a Pandas Series
+    tot = dfm.sum()
+
+    # Add in a column to report the period being summarized
+    dfm['period'] = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    tot['period'] = 'Annual'
+
     # Fix the seasonal COP and the peak demand values
-    tot = s.ser_annual      # shortcut
     if tot.hp_kwh:
         tot['cop'] =  tot.hp_load_mmbtu * 1e6 / tot.hp_kwh / 3412.
     else:
         tot['cop'] = np.nan
-    tot['hp_kw'] = dfm['hp_kw'].max()    # maximum across all the months
-    tot['secondary_kw'] = dfm['secondary_kw'].max()
-    tot['total_kw'] = dfm['total_kw'].max()
-    """
+    tot['hp_kw_max'] = dfm['hp_kw_max'].max()    # maximum across all the months
+    tot['secondary_kw_max'] = dfm['secondary_kw_max'].max()
+    tot['total_kw_max'] = dfm['total_kw_max'].max()
+
+    # Include monthly and annual results
+    res['monthly_results'] = [HeatTimePeriodResults(**row) for row in dfm.to_dict(orient='records')]
+    res['annual_results'] = tot.to_dict()
 
     return HeatModelResults(**res)
 
