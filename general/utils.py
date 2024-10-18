@@ -2,6 +2,7 @@
 """
 import math
 import numbers
+import simplejson
 
 def chg_nonnum(val, sub_val):
     """Changes a nan or anything that is not a number to 'sub_val'.  
@@ -41,3 +42,9 @@ def is_null(val):
         return True
 
     return False
+
+def NaNtoNone(obj):
+    """Converts the NaN values found in an object 'obj' into None values. Only
+    works objects that can be serialized to JSON.
+    """
+    return simplejson.loads(simplejson.dumps(obj, ignore_nan=True))

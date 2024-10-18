@@ -6,7 +6,6 @@ from typing import Tuple
 import numpy as np
 import pandas as pd
 
-from . import constants
 from .models import (
     HeatModelInputs,
     HeatTimePeriodResults,
@@ -14,8 +13,9 @@ from .models import (
     WallInsulLevel, 
     TemperatureTolerance,
 )
+from .hspf_convert import convert_to_hspf
 from library import library as lib
-from general.utils import chg_nonnum
+from general.utils import chg_nonnum, NaNtoNone
 
 # Some General Constants
 ELECTRIC_ID = 1    # The fuel ID for Electricity
@@ -24,42 +24,47 @@ ELECTRIC_ID = 1    # The fuel ID for Electricity
 
 # Piecewise linear COP vs. outdoor temperature.  See the notebook at
 # https://github.com/alanmitchell/heat-pump-study/blob/master/general/cop_vs_temp.ipynb
-# for derivation of this curve.  It is based on averaging a number of field studies
-# of heat pump performance.
+# for derivation of the original values of this curve.  It was based on averaging a number 
+# of field studies of heat pump performance. The values below contain two modifications of that
+# original curve:
+#     1. COPs were reduced by a factor of 0.9 on March 2022 to bring them into better
+#        alignment with measured Seward COPs of 2.66 for HSPF = 15.0 Gree unit, and
+#        COP = 2.62 for HSPF = 13.3 Fujitsu unit (both units owned by Phil Kaluza).
+#     2. The original COP curve dropped off rapidly at low outdoor temperatures. 
+#        Cold chamber testing of popular Alaskan mini-splits by Tom Marsik at CCHRC
+#        showed a much less rapid drop off of COP at cold temperatures. The curve below
+#        uses Tom's drop-off slope for temperatures less than 2 deg F.
+#        see '/home/alan/gdrive/Heat_pump/models/low-temp-cop.ipynb for the details of
+#        the new low-temperature figures.
+
 COP_vs_TEMP = (
-    (-20.0, 0.66),
-    (-14.0, 1.11),
-    (-10.0, 1.41),
-    (-6.2, 1.54),
-    (-1.9, 1.67),
-    (2.0, 1.76),
-    (6.0, 1.89),
-    (10.8, 2.04),
-    (14.2, 2.15),
-    (18.1, 2.26),
-    (22.0, 2.37),
-    (25.7, 2.46),
-    (29.9, 2.50),
-    (34.5, 2.71),
-    (38.1, 2.88),
-    (41.8, 3.00),
-    (46.0, 3.10),
-    (50.0, 3.23),
-    (54.0, 3.32),
-    (58.0, 3.43),
-    (61.0, 3.51),
+    (-20.0, 1.06),
+    (-14.0, 1.21),
+    (-10.0, 1.30),
+    (-6.2, 1.39),
+    (-1.9, 1.49),
+    (2.0, 1.58),
+    (6.0, 1.70),
+    (10.8, 1.84),
+    (14.2, 1.93),
+    (18.1, 2.03),
+    (22.0, 2.13),
+    (25.7, 2.21),
+    (29.9, 2.25),
+    (34.5, 2.44),
+    (38.1, 2.59),
+    (41.8, 2.70),
+    (46.0, 2.79),
+    (50.0, 2.91),
+    (54.0, 2.99),
+    (58.0, 3.09),
+    (61.0, 3.16),
 )
 
 # convert to separate lists of temperatures and COPs
 TEMPS_FIT, COPS_FIT = tuple(zip(*COP_vs_TEMP))
 TEMPS_FIT = np.array(TEMPS_FIT)
 COPS_FIT = np.array(COPS_FIT)
-
-# March 2022 adjustment to COPs.  A downward adjustment was made so that the model comes
-# into better alignment with measured Seward COPs of 2.66 for HSPF = 15.0 Gree unit, and 
-# COP = 2.62 for HSPF = 13.3 Fujitsu unit (both units owned by Phil Kaluza).
-COP_ADJ = 0.9
-COPS_FIT = COP_ADJ * COPS_FIT
 
 # The HSPF value that this curve is associated with.  This is the average of the HSPFs
 # for the studies used to create the above COP vs. Temperature curve.  See the above 
@@ -153,8 +158,9 @@ def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
         # the ratio to the 0.5 power.  This was a judgement call.
 
         # ** TO DO **: Convert other HSPF values into old HSPF
+        hspf_old = convert_to_hspf(inp.heat_pump.hspf, inp.heat_pump.hspf_type)
 
-        cops_fit_adj = COPS_FIT * (inp.heat_pump.hspf / BASE_HSPF) ** 0.5
+        cops_fit_adj = COPS_FIT * (hspf_old / BASE_HSPF) ** 0.5
 
         # Also adjust the associated outdoor temperature points to account for the fact
         # that the indoor temperature setpoint does not equal the 70 degree F
@@ -348,8 +354,8 @@ def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
     tot['total_kw_max'] = dfm['total_kw_max'].max()
 
     # Include monthly and annual results
-    res['monthly_results'] = [HeatTimePeriodResults(**row) for row in dfm.to_dict(orient='records')]
-    res['annual_results'] = tot.to_dict()
+    res['monthly_results'] = [HeatTimePeriodResults(**NaNtoNone(row)) for row in dfm.to_dict(orient='records')]
+    res['annual_results'] = NaNtoNone(tot.to_dict())
 
     # dfh.to_excel('/home/alan/Downloads/dfh.xlsx')
 

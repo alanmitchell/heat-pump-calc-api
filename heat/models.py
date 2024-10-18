@@ -65,7 +65,7 @@ class HeatTimePeriodResults(BaseModel):
     hp_load_mmbtu: float       # heat load in MMBTU served by heat pump
     hp_kwh: float              # kWh consumed by heat pump
     hp_kw_max: float           # max kW demand of heat pump
-    cop: float                 # average heat pump COP for the period
+    cop: float | None                 # average heat pump COP for the period
     secondary_load_mmbtu: float   # heat load in MMBTU served by secondary, conventional, heating system
     secondary_fuel_mmbtu: float   # fuel consumed by the secondary system in MMBTU
     secondary_fuel_units: float   # fuel consumed by the secondary system in units of fuel, e,g, 'gallon'

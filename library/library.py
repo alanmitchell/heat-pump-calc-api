@@ -15,9 +15,9 @@ from typing import List
 
 import pandas as pd
 import requests
-from simplejson import dumps, loads
 
 from general.models import Choice
+from general.utils import NaNtoNone
 from library.models import (
     City, 
     Utility, 
@@ -70,7 +70,7 @@ def city_from_id(city_id) -> City:
     # turn utility list into list of Choice items
     city_dict['ElecUtilities'] = [{'label': label, 'id': id} for label, id in city_dict['ElecUtilities']]
     # do the following to replace NaN's with None
-    city_dict = loads(dumps(city_dict, ignore_nan=True))
+    city_dict = NaNtoNone(city_dict)
     return City(**city_dict)
 
 # --------------------------------------------------------------------------------------
@@ -86,7 +86,7 @@ def util_from_id(util_id) -> Utility:
     """Returns a dictionary containing all of the Utility information for
     the Utility identified by util_id.
     """
-    return_dict = loads(dumps(df_util.loc[util_id].to_dict(), ignore_nan=True))
+    return_dict = NaNtoNone(df_util.loc[util_id].to_dict())
     return Utility(**return_dict)
 
 # --------------------------------------------------------------------------------------
@@ -101,7 +101,7 @@ def fuel_from_id(fuel_id) -> Fuel:
     """Returns fuel information for the fuel with
     and ID of 'fuel_id'
     """
-    return_dict = loads(dumps(df_fuel.loc[fuel_id].to_dict(), ignore_nan=True))
+    return_dict = NaNtoNone(df_fuel.loc[fuel_id].to_dict())
     return Fuel(**return_dict)
 
 def fuel_price(fuel_id, city_id) -> FuelPrice:
@@ -118,7 +118,7 @@ def fuel_price(fuel_id, city_id) -> FuelPrice:
         # Price column is a NaN and not present for electricity
         price = None
 
-    return_dict = loads(dumps({'city': city_name, 'fuel': fuel_name, 'price': price}, ignore_nan=True))
+    return_dict = NaNtoNone({'city': city_name, 'fuel': fuel_name, 'price': price})
     return FuelPrice(**return_dict)
 
 # --------------------------------------------------------------------------------------
