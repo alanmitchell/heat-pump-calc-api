@@ -334,9 +334,6 @@ def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
     # COP by month
     dfm['cop'] = dfm.hp_load_mmbtu / (dfm.hp_kwh * 0.003412)   
 
-    # Total lbs of CO2 per month, counting electricity and fuel
-    dfm['co2_lbs'] = dfm.total_kwh * inp.co2_lbs_per_kwh + dfm.secondary_fuel_mmbtu * chg_nonnum(fuel.co2, 0.0)
-
     # calculate annual totals. this is a Pandas Series
     tot = dfm.sum()
 

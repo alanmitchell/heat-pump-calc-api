@@ -73,7 +73,6 @@ class HeatTimePeriodResults(BaseModel):
     secondary_kw_max: float       # max electricity used by secondary system in kW
     total_kwh: float              # total electricity kWh used by heat pump and secondary system
     total_kw_max: float           # maximum kW coincident demand by heat pump and secondary heating system
-    co2_lbs: float                # CO2 released due to fuel and electricity consumed by both heating systems
 
 
 class HeatModelResults(BaseModel):
