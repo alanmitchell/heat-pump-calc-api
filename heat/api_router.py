@@ -20,27 +20,26 @@ Sample JSON Input Data:
   "city_id": 1,
   "heat_pump": {
     "hspf_type": "hspf",
-    "hspf": 13.5,
-    "max_out_5f": 15000,
+    "hspf": 13.25,
+    "max_out_5f": 11000,
     "low_temp_cutoff": 5,
-    "off_months": null
+    "off_months": null,
+    "frac_exposed_to_hp": 0.4,
+	"frac_adjacent_to_hp": 0.25,
+    "doors_open_to_adjacent": true,
+    "bedroom_temp_tolerance": "low",
+    "serves_garage": false
   },
   "exist_heat_system": {
     "heat_fuel_id": 3,
     "heating_effic": 0.8,
-    "aux_elec_use": 1.5
+    "aux_elec_use": 3.0
   },
-  "co2_lbs_per_kwh": 0.75,
-  "garage_stall_count": 1,
-  "garage_heated_by_hp": false,
-  "bldg_floor_area": 1000,
+  "bldg_floor_area": 3600,
+  "garage_stall_count": 2,
   "indoor_heat_setpoint": 70,
-  "insul_level": "wall2x6",
-  "pct_exposed_to_hp": 0.5,
-  "doors_open_to_adjacent": true,
-  "bedroom_temp_tolerance": "low",
-  "ua_true_up": 1
+  "insul_level": "wall2x6plus",
+  "ua_true_up": 1.0
 }
-
 
 """

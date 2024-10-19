@@ -236,7 +236,8 @@ def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
     # More complicated calculations are done in this hourly loop.  If processing
     # time becomes a problem, try to convert the calculations below into array
     # operations that can be done outside the loop.
-    max_hp_reached = False       # tracks whether heat pump max output has been reached.
+
+    hp_capacity_used = []       # fraction of heat pump capacity used in each hour
 
     for h in dfh.itertuples():
         # calculate total heat load for the hour.
@@ -248,16 +249,17 @@ def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
         if not h.running:
             hp_load.append(0.0)
             secondary_load.append(total_load)
+            hp_capacity_used.append(0.0)
         else:
             # Build up the possible heat pump load, and then limit it to 
             # maximum available from the heat pump.
 
             # Start with all of the load in the spaces exposed to heat pump indoor
             # units.
-            hp_ld = home_load * inp.pct_exposed_to_hp
+            hp_ld = home_load * inp.heat_pump.frac_exposed_to_hp
 
             # Then, garage load if it is heated by the heat pump 
-            hp_ld += garage_load * inp.garage_heated_by_hp
+            hp_ld += garage_load * inp.heat_pump.serves_garage
 
             # For the spaces adjacent to the space heated directly by the heat pump,
             # first calculate how much cooler those spaces would be without direct
@@ -266,20 +268,20 @@ def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
                 ua_home / inp.bldg_floor_area,
                 balance_point_home,
                 h.db_temp,
-                inp.doors_open_to_adjacent
+                inp.heat_pump.doors_open_to_adjacent
             )
             # determine the temp depression tolerance in deg F
             temp_depress_tolerance = {
                 TemperatureTolerance.low: 2.0, 
                 TemperatureTolerance.med: 5.0, 
                 TemperatureTolerance.high: 10.0
-                }[inp.bedroom_temp_tolerance]
+                }[inp.heat_pump.bedroom_temp_tolerance]
             # if depression is less than this, include the load
             if temp_depress <= temp_depress_tolerance:
                 # I'm not diminishing the load here for smaller delta-T.  It's possible
                 # the same diminished delta-T was present in the base case (point-source
                 # heating system).  Probably need to refine this.
-                hp_ld += home_load * (1.0 - inp.pct_exposed_to_hp)
+                hp_ld += home_load * inp.heat_pump.frac_adjacent_to_hp
 
             # limit the heat pump load to its capacity at this temperature
             hp_ld = min(hp_ld, h.max_hp_output)
@@ -287,15 +289,15 @@ def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
             hp_load.append(hp_ld)
             secondary_load.append(total_load - hp_ld)
 
-            if hp_ld >= h.max_hp_output * 0.999:
-                # running at within 0.1% of maximum heat pump output.
-                max_hp_reached = True
+            # record the fraction of the heat pump capacity being used.
+            hp_capacity_used.append(hp_ld / h.max_hp_output)
 
     dfh['hp_load_mmbtu'] = np.array(hp_load) / 1e6
     dfh['secondary_load_mmbtu'] = np.array(secondary_load) / 1e6
+    dfh['hp_capacity_used'] = hp_capacity_used
 
-    # reduce the secondary load to account for the heat produced by the auxiliary electricity
-    # use.
+    # reduce the secondary load to account for the heat produced by
+    # the auxiliary electricity use.
     # convert the auxiliary heat factor for the secondary heating system into an
     # energy ratio of aux electricity energy to heat delivered.
     aux_ratio = inp.exist_heat_system.aux_elec_use * 0.003412
@@ -321,6 +323,9 @@ def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
     # Annual totals is a Pandas Series.
     total_cols = ['hp_load_mmbtu', 'secondary_load_mmbtu', 'hp_kwh', 'secondary_fuel_mmbtu', 'secondary_kwh', 'total_kwh']
     dfm = dfh.groupby('month')[total_cols].sum()
+
+    # Add a column for the fraction of heat pump capacity used, maximum across hours
+    dfm['hp_capacity_used_max'] = dfh.groupby('month')[['hp_capacity_used']].max()
     
     # Add in columns for the peak electrical demand during the month
     dfm['hp_kw_max'] = dfh.groupby('month')[['hp_kwh']].max()
@@ -341,12 +346,13 @@ def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
     dfm['period'] = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     tot['period'] = 'Annual'
 
-    # Fix the seasonal COP and the peak demand values
+    # Fix the seasonal COP and the maximum values
     if tot.hp_kwh:
         tot['cop'] =  tot.hp_load_mmbtu * 1e6 / tot.hp_kwh / 3412.
     else:
         tot['cop'] = np.nan
-    tot['hp_kw_max'] = dfm['hp_kw_max'].max()    # maximum across all the months
+    tot['hp_capacity_used_max'] = dfm['hp_capacity_used_max'].max()
+    tot['hp_kw_max'] = dfm['hp_kw_max'].max()    
     tot['secondary_kw_max'] = dfm['secondary_kw_max'].max()
     tot['total_kw_max'] = dfm['total_kw_max'].max()
 
