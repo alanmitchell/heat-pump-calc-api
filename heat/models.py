@@ -78,7 +78,73 @@ class HeatTimePeriodResults(BaseModel):
 
 class HeatModelResults(BaseModel):
     """Space Heat Model results"""
-    monthly_results: List[HeatTimePeriodResults]
-    annual_results: HeatTimePeriodResults
+    monthly_results: List[HeatTimePeriodResults]   # monthly totals of key modeling results
+    annual_results: HeatTimePeriodResults   # Annual totals of key modeling results
+    design_heat_temp: float                 # 99% design heating temperature, deg F
+    design_heat_load: float                 # 99% design heating load, BTU/hour
 
+# ---------------------------------------------
+
+# Models related to Heat Pump analysis.
+
+class HeatPumpCost(BaseModel):
+    """Cost information about installing, operating, and potentially financing
+    a heat pump.
+    """
+    capital_cost: float                # Installation cost, $
+    rebate_amount: float = 0.0         # Rebate $ available to offset installation cost
+    heat_pump_life: int = 14           # Life of heat pump in years
+    op_cost_chg: float = 0.0           # Change in annual heating system operating cost due to use of 
+                                       #    heat pump. A positive value means increase in operating cost.
+    frac_financed: float = 0.0         # Fraction of the (capital_cost - rebate_amount) that is financed, 0 - 1.0
+    loan_term: int | None = None       # Length of loan in years
+    loan_interest: float | None = None # Loan interest rate, expressed as fraction, e.g. 0.055 for 5.5%
+
+class EconomicInputs(BaseModel):
+    """ Inputs related to fuel and electricity costs and economic analysis factors.
+    """
+    utility_id: int                          # ID of the electric utility rate schedule serving the building
+    include_pce: bool = True                 # If True, PCE assistance will be included for this building
+    pce_limit: float = 750.0                 # kWh limit per month for PCE assistance
+    elec_rate_forecast_pattern: List[float] = [1.0]   # A list of electric price multipliers for the years
+                                                      #    spanning the life the of the heat pump. If the list is
+                                                      #    shorter than the life, the last value is extended for 
+                                                      #    missing years.
+    elec_rate_override: float | None = None         # If provided, overrides the electric energy and demand 
+                                                    #    charges in the Utility rate schedule
+    pce_rate_override: float | None = None          # Overrides the PCE rate in the Utility rate schedule
+    customer_charge_override: float | None = None   # Overrides Utility customer charge
+    co2_lbs_per_kwh_override: float | None = None   # Overrides Utility CO2 pounds per kWh of Utility electricity
+    fuel_cost_override: float | None = None         # Overrides the fuel cost for the city.
+    fuel_cost_forecast_pattern: List[float] = [1.0] # A list of fuel price multipliers for years spanning heat pump life
+                                                    #    If shorter than heat pump life, last value is extended.
+    sales_tax_override: float | None = None         # Overrides sales tax (city + borough) for the city
+    discount_rate: float = 0.03                     # Economic discount rate as a fraction for Present Value
+                                                    #    calculations, inflation-adjusted, 0.03 for 3% / year
+    inflation_rate: float = 0.023                   # General inflation rate, expressed as a fraction, 0.02 for 2% / year
+
+class ActualFuelUse(BaseModel):
+    """This model describes the actual fuel and electricity use of the building assuming
+    *no* heat pump, so the electricity use is actual use prior to installing a heat pump.
+    """
+    secondary_fuel_units: float       # This is the annual amount of fuel used by the building, the fuel being
+                                      #    the type used for space heating.  Express this value in the normal 
+                                      #    units used for the fuel, e.g. gallons for oil.
+    includes_dhw: bool = True         # If the above fuel consumption includes fuel used to heat Domestic Hot Water
+                                      #    then this should be set to True.
+    includes_clothes_drying: bool = False       # True if the above fuel use includes clothes drying fuel use
+    includes_cooking: bool = False              # True if the above fuel use includes cooking fuel use
+    electric_use_by_month = List[float | None]  # A 12-element list of the monthly electricity use of the building in kWh
+                                                #   unkown values can be set to None.
+
+class HeatPumpAnalysisInputs(BaseModel):
+    """Describes all the inputs used the analysis of the heat pump
+    """
+    bldg_name: str = ''                  # Building Name
+    notes: str = ''                      # Notes about the analysis
+    bldg_model_inputs: HeatModelInputs   # Inputs describing the space heating characteristics of the building
+    heat_pump_cost: HeatPumpCost         # Inputs describing the cost of installing and operating the heat pump
+    economic_inputs: EconomicInputs      # Fuel and Electricity price inputs and general economic inputs.
+    actual_fuel_use: ActualFuelUse       # Information about the actual fuel and electricity use of the home
+                                         #    prior to installing the heat pump.
 

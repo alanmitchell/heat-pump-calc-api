@@ -360,7 +360,52 @@ def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
     res['monthly_results'] = [HeatTimePeriodResults(**NaNtoNone(row)) for row in dfm.to_dict(orient='records')]
     res['annual_results'] = NaNtoNone(tot.to_dict())
 
+    # Calculate and record design heating load information
+    design_t = tmy_site.site_info.heating_design_temp
+    res['design_heat_temp'] = design_t
+    res['design_heat_load'] = ua_home * (inp.indoor_heat_setpoint - design_t) + \
+        ua_garage * (GARAGE_HEATING_SETPT - design_t)
+
     # dfh.to_excel('/home/alan/Downloads/dfh.xlsx')
 
     return HeatModelResults(**res)
 
+def determine_ua_true_up(heat_model_inputs: HeatModelInputs, secondary_fuel_use_actual: float) -> float:
+    """Returns a UA true up multiplier that causes the space heat model to match the actual space
+    heating use of the home, which is passed in the 'secondary_fuel_use_actual' variable.
+    """
+    # make a copy of the inputs to work with
+    inp = heat_model_inputs.model_copy()
+
+    # set a flag indicating if this uses electric resistance as the existing space heat source
+    is_electric = (inp.exist_heat_system.heat_fuel_id == ELECTRIC_ID)
+    
+    # remove heat pump and set UA true to 1.0
+    inp.heat_pump = None
+    inp.ua_true_up = 1.0
+    
+    # model space heat use of the building
+    res = model_space_heat(inp)
+    # retrieve space heating fuel use expressed in fuel units (e.g. gallon)
+    if is_electric:
+        fuel_use1 = res.annual_results.secondary_kwh
+    else:
+        fuel_use1 = res.annual_results.secondary_fuel_units
+  
+    # scale the UA linearly to attempt to match the target fuel use
+    ua_true_up = secondary_fuel_use_actual / fuel_use1
+    inp.ua_true_up = ua_true_up
+    res = model_space_heat(inp)
+
+    if is_electric:
+        # For electric heat, electric use for space heat is in secondary_kwh
+        fuel_use2 = res.annual_results.secondary_kwh
+    else:
+        fuel_use2 = res.annual_results.secondary_fuel_units
+    
+    # In case it wasn't linear, inter/extrapolate to the final ua_true_up
+    if ua_true_up != 1.0:
+        slope = (fuel_use2 - fuel_use1)/(ua_true_up - 1.0)
+        ua_true_up = 1.0 + (secondary_fuel_use_actual - fuel_use1) / slope
+
+    return ua_true_up
