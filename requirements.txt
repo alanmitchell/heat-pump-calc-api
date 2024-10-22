@@ -4,3 +4,4 @@ pandas
 openpyxl
 requests
 simplejson
+numpy_financial

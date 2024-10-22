@@ -134,8 +134,10 @@ class ActualFuelUse(BaseModel):
                                       #    then this should be set to True.
     includes_clothes_drying: bool = False       # True if the above fuel use includes clothes drying fuel use
     includes_cooking: bool = False              # True if the above fuel use includes cooking fuel use
-    electric_use_by_month = List[float | None]  # A 12-element list of the monthly electricity use of the building in kWh
+    electric_use_by_month: List[float | None]   # A 12-element list of the monthly electricity use of the building in kWh
                                                 #   unkown values can be set to None.
+    occupant_count: int | None                  # Number of occupants associated with this level of
+                                                #    fuel/electricity use.
 
 class HeatPumpAnalysisInputs(BaseModel):
     """Describes all the inputs used the analysis of the heat pump
@@ -148,3 +150,7 @@ class HeatPumpAnalysisInputs(BaseModel):
     actual_fuel_use: ActualFuelUse       # Information about the actual fuel and electricity use of the home
                                          #    prior to installing the heat pump.
 
+class HeatPumpAnalysisResults(BaseModel):
+    """Results from the analysis of installing a heat pump.
+    """
+    val1: float
