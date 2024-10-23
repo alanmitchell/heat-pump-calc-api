@@ -14,7 +14,7 @@ import numpy as np
 import numpy_financial as npf
 
 from .models import HeatPumpAnalysisInputs, HeatPumpAnalysisResults
-from .home_heat_model import model_space_heat
+from .home_heat_model import model_space_heat, ELECTRIC_ID
 from .elec_cost import ElecCostCalc
 import library.library as lib
 from general.utils import is_null
@@ -61,7 +61,33 @@ def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
     city = lib.city_from_id(inp.bldg_model_inputs.city_id)
     fuel = lib.fuel_from_id(inp.bldg_model_inputs.exist_heat_system.heat_fuel_id)
 
-    
+    # shortcuts to some of the input structures
+    inp_bldg = inp.bldg_model_inputs
+    inp_hpc = inp.heat_pump_cost
+    inp_econ = inp.economic_inputs
+    inp_actual = inp.actual_fuel_use
+
+    # If other end uses use the heating fuel, make an estimate of their annual
+    # consumption of that fuel.  This figure is expressed in the physical unit
+    # for the fuel type, e.g. gallons of oil.  Save this as an object attribute
+    # so it is accessible in other routines.  See Evernote notes on values (AkWarm
+    # for DHW and Michael Bluejay for Drying and Cooking).
+    is_electric = (fuel.id == ELECTRIC_ID)  # True if Electric
+    fuel_other_uses = inp_bldg.exist_heat_system.serves_dhw * 4.23e6 / fuel.dhw_effic
+    fuel_other_uses += inp_bldg.exist_heat_system.serves_clothes_drying * (0.86e6 if is_electric else 2.15e6)
+    fuel_other_uses += inp_bldg.exist_heat_system.serves_cooking * (0.64e6 if is_electric else 0.8e6)
+    fuel_other_uses *= inp_bldg.exist_heat_system.occupant_count / fuel.btus
+
+    # For elecric heat we also need to account for lights and other applicances not
+    # itemized above.
+    if is_electric:
+        # Use the AkWarm Medium Lights/Appliances formula but take 25% off
+        # due to efficiency improvements since then.
+        lights_other_elec = 2086. + 1.20 * inp_bldg.bldg_floor_area   # kWh in the year
+    else:
+        lights_other_elec = 0.0
+
+
 
     return HeatPumpAnalysisResults(**res)
 
