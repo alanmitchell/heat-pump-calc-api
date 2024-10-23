@@ -71,6 +71,7 @@ def city_from_id(city_id) -> City:
     city_dict['ElecUtilities'] = [{'label': label, 'id': id} for label, id in city_dict['ElecUtilities']]
     # do the following to replace NaN's with None
     city_dict = NaNtoNone(city_dict)
+    city_dict['id'] = city_id
     return City(**city_dict)
 
 # --------------------------------------------------------------------------------------
@@ -87,6 +88,7 @@ def util_from_id(util_id) -> Utility:
     the Utility identified by util_id.
     """
     return_dict = NaNtoNone(df_util.loc[util_id].to_dict())
+    return_dict['id'] = util_id
     return Utility(**return_dict)
 
 # --------------------------------------------------------------------------------------
@@ -101,8 +103,9 @@ def fuel_from_id(fuel_id) -> Fuel:
     """Returns fuel information for the fuel with
     and ID of 'fuel_id'
     """
-    return_dict = NaNtoNone(df_fuel.loc[fuel_id].to_dict())
-    return Fuel(**return_dict)
+    fuel_dict = NaNtoNone(df_fuel.loc[fuel_id].to_dict())
+    fuel_dict['id'] = fuel_id
+    return Fuel(**fuel_dict)
 
 def fuel_price(fuel_id, city_id) -> FuelPrice:
     """Returns the fuel price for the fuel identified by the ID of 

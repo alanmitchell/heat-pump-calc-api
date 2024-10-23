@@ -8,6 +8,7 @@ from general.models import Choice
 class City(BaseModel):
     """Information about one city.
     """
+    id: int                              # ID of this City
     Name: str                            # City name
     Latitude: float                      # Latitude, decimal degrees
     Longitude: float                     # Longitude, decimal degrees
@@ -41,6 +42,7 @@ class City(BaseModel):
 
 class Utility(BaseModel):
     """Electric Utility Rate Structure Information"""
+    id: int                              # ID of this utility rate schedule
     Name: str                            # Name of the rate schedule
     Type: int                            # 1 = Electricity, 2 = Natural Gas
     IsCommercial: bool                   # True if Commercial rate structure, False if Residential
@@ -53,6 +55,7 @@ class Utility(BaseModel):
                                                       #    Last block has None for block limit.
 
 class Fuel(BaseModel):
+    id: int                           # ID of this fuel type
     desc: str                         # Name of fuel
     unit: str                         # Measurement unit of fuel, e.g. 'gallon'
     btus: float                       # BTUs per unit of fuel

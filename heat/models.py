@@ -58,7 +58,6 @@ class ConventionalHeatingSystem(BaseModel):
     occupant_count: int | None = None     # Number of occupants for purposes of estimating non-space-heat
                                           #     end uses consumption.
 
-
 class HeatModelInputs(BaseModel):
     """Inputs to the Home Space Heating model."""
     city_id: int                          # ID of City being modeled (use Library cities() method for IDs)
