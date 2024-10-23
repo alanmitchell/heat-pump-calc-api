@@ -1,6 +1,6 @@
 """Models associated with the home energy and heat pump calculations.
 """
-from typing import Tuple, List, Any
+from typing import List
 from enum import Enum
 
 from pydantic import BaseModel
@@ -12,6 +12,13 @@ class HSPFtype(str, Enum):
     hspf2_reg5 = 'hspf2_reg5'    # HSPF2, Climate Region 5
     hspf2_reg4 = 'hspf2_reg4'    # HSPF2, Climate Region 4
     hspf = 'hspf'                # Original HSPF
+
+class BuildingType(str, Enum):
+    """Type of Building. Only relevant for determine the amount
+    of PCE assistance that the building is eligible for."""
+    residential = 'residential'
+    commercial = 'commercial'
+    community = 'community'
 
 class WallInsulLevel(str, Enum):
     """Description of Wall Insulation"""
@@ -45,12 +52,20 @@ class ConventionalHeatingSystem(BaseModel):
     heat_fuel_id: int   # ID of heating system fuel type (use Library fuels() method for IDs)
     heating_effic: float    # 0 - 1.0 seasonal heating efficiency
     aux_elec_use: float     # Auxiliary fan/pump/controls electric use, expressed as kWh/(MMBTU heat delivered)
+    serves_dhw: bool = True               # True if this fuel type heats Domestic Hot Water as well
+    serves_clothes_drying: bool = False   # True if this fuel type is used for clothes drying
+    serves_cooking: bool = False          # True if this fuel type is used for cooking
+    occupant_count: int | None = None     # Number of occupants for purposes of estimating non-space-heat
+                                          #     end uses consumption.
+
 
 class HeatModelInputs(BaseModel):
     """Inputs to the Home Space Heating model."""
     city_id: int                          # ID of City being modeled (use Library cities() method for IDs)
     heat_pump: HeatPump | None = None     # Description of Heat Pump. If None, then no heat pump.
     exist_heat_system: ConventionalHeatingSystem   # Description of existing, non-heat-pump heating system
+    building_type: BuildingType = BuildingType.residential  # Type of building, relevant for PCE 
+                                                            #    applicability and limits.
     garage_stall_count: int               # 0: No garage, 1: 1-car garage.  Max is 4.
     bldg_floor_area: float                # Floor area in square feet of home living area, not counting garage.
     indoor_heat_setpoint: float = 70.0    # Indoor heating setpoint, deg F
@@ -127,17 +142,11 @@ class ActualFuelUse(BaseModel):
     """This model describes the actual fuel and electricity use of the building assuming
     *no* heat pump, so the electricity use is actual use prior to installing a heat pump.
     """
-    secondary_fuel_units: float       # This is the annual amount of fuel used by the building, the fuel being
-                                      #    the type used for space heating.  Express this value in the normal 
-                                      #    units used for the fuel, e.g. gallons for oil.
-    includes_dhw: bool = True         # If the above fuel consumption includes fuel used to heat Domestic Hot Water
-                                      #    then this should be set to True.
-    includes_clothes_drying: bool = False       # True if the above fuel use includes clothes drying fuel use
-    includes_cooking: bool = False              # True if the above fuel use includes cooking fuel use
-    electric_use_by_month: List[float | None]   # A 12-element list of the monthly electricity use of the building in kWh
+    secondary_fuel_units: float | None = None  # This is the annual amount of fuel used by the building, the fuel being
+                                               #    the type used for space heating.  Express this value in the normal 
+                                               #    units used for the fuel, e.g. gallons for oil.
+    electric_use_by_month: List[float | None] | None = None   # A 12-element list of the monthly electricity use of the building in kWh
                                                 #   unkown values can be set to None.
-    occupant_count: int | None                  # Number of occupants associated with this level of
-                                                #    fuel/electricity use.
 
 class HeatPumpAnalysisInputs(BaseModel):
     """Describes all the inputs used the analysis of the heat pump
@@ -153,4 +162,4 @@ class HeatPumpAnalysisInputs(BaseModel):
 class HeatPumpAnalysisResults(BaseModel):
     """Results from the analysis of installing a heat pump.
     """
-    val1: float
+    val1: float = -99.0

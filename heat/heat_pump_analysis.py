@@ -13,10 +13,10 @@ import pandas as pd
 import numpy as np
 import numpy_financial as npf
 
-import library.library as lib
-from . import elec_cost
+from .models import HeatPumpAnalysisInputs, HeatPumpAnalysisResults
 from .home_heat_model import model_space_heat
 from .elec_cost import ElecCostCalc
+import library.library as lib
 from general.utils import is_null
 
 # --------- Some Constants
@@ -51,6 +51,19 @@ def convert_co2_to_miles_driven(co2_saved):
     
     return mileage_equivalent
 
+def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
+    """Performs a performance and economic analysis of installing a Heat Pump.
+    """
+    # Start results dictionary
+    res = {}
+
+    # acquire some key objects
+    city = lib.city_from_id(inp.bldg_model_inputs.city_id)
+    fuel = lib.fuel_from_id(inp.bldg_model_inputs.exist_heat_system.heat_fuel_id)
+
+    
+
+    return HeatPumpAnalysisResults(**res)
 
 '''
 

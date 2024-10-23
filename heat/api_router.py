@@ -2,7 +2,8 @@
 from fastapi import APIRouter
 
 from . import home_heat_model as heat
-from .models import HeatModelInputs, HeatModelResults
+from . import heat_pump_analysis as analyze
+from .models import HeatModelInputs, HeatModelResults, HeatPumpAnalysisInputs, HeatPumpAnalysisResults
 
 router = APIRouter()
 
@@ -10,11 +11,13 @@ router = APIRouter()
 async def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
     return heat.model_space_heat(inp)
 
-
+@router.post("/heat/analyze-heat-pump", response_model=HeatPumpAnalysisResults, tags=['Heating Models'])
+async def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
+    return analyze.analyze_heat_pump(inp)
 
 """
 
-Sample JSON Input Data:
+Sample JSON Input Data for model-space-heat:
 
 {
   "city_id": 1,
