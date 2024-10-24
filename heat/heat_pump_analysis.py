@@ -14,7 +14,7 @@ import numpy as np
 import numpy_financial as npf
 
 from .models import HeatPumpAnalysisInputs, HeatPumpAnalysisResults
-from .home_heat_model import model_space_heat, ELECTRIC_ID
+from .home_heat_model import model_space_heat, ELECTRIC_ID, determine_ua_true_up
 from .elec_cost import ElecCostCalc
 import library.library as lib
 from general.utils import is_null
@@ -87,7 +87,36 @@ def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
     else:
         lights_other_elec = 0.0
 
+    res['fuel_other_uses'] = fuel_other_uses
+    res['lighs_other_elec'] = lights_other_elec
 
+    # Match the existing space heating use if it is provided.  Do so by using
+    # the UA true up factor.
+    if inp_actual.secondary_fuel_units is not None:
+        
+        # Remove the energy use from the other end uses that use the fuel, unless
+        # this is electric heat and the user indicated that the entered value is
+        # just space heating.
+        if is_electric and inp.actual_fuel_use.annual_electric_is_just_space_heat:
+            # user explicitly indicated that the entered annual usage value is
+            # just space heating.
+            space_fuel_use = inp.actual_fuel_use.secondary_fuel_units
+        else:
+            space_fuel_use = inp.actual_fuel_use.secondary_fuel_units - fuel_other_uses
+            if is_electric:
+                # if electric heat, also need to subtract out other lights and appliances
+                space_fuel_use -= lights_other_elec
+
+        ua_true_up = determine_ua_true_up(inp_bldg, space_fuel_use)
+
+    else:
+        ua_true_up = 1.0
+        
+    # Set the UA true up value into the model and also save it as
+    # an attribute of this object so it can be observed.
+    inp_bldg.ua_true_up = ua_true_up
+
+    res['ua_true_up'] = ua_true_up
 
     return HeatPumpAnalysisResults(**res)
 

@@ -146,6 +146,8 @@ class ActualFuelUse(BaseModel):
                                                #    units used for the fuel, e.g. gallons for oil.
     electric_use_by_month: List[float | None] | None = None   # A 12-element list of the monthly electricity use of the building in kWh
                                                 #   unkown values can be set to None.
+    annual_electric_use: float | None = None    # Total annual electric use is kWh
+    annual_electric_is_just_space_heat: bool = False  # True if the above electric use only includes space heating.
 
 class HeatPumpAnalysisInputs(BaseModel):
     """Describes all the inputs used the analysis of the heat pump
@@ -161,4 +163,5 @@ class HeatPumpAnalysisInputs(BaseModel):
 class HeatPumpAnalysisResults(BaseModel):
     """Results from the analysis of installing a heat pump.
     """
-    val1: float = -99.0
+    fuel_other_uses: float = -99.0
+    lights_other_elec: float = -99
