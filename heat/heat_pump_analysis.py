@@ -17,7 +17,7 @@ from .models import HeatPumpAnalysisInputs, HeatPumpAnalysisResults
 from .home_heat_model import model_space_heat, ELECTRIC_ID, determine_ua_true_up
 from .elec_cost import ElecCostCalc
 import library.library as lib
-from general.utils import is_null
+from general.utils import is_null, chg_nonnum
 
 # --------- Some Constants
 
@@ -39,7 +39,7 @@ def make_pattern(esc, life):
     pat = np.ones(life - 1) * (1 + esc)
     return np.insert(pat.cumprod(), 0, [0.0, 1.0])
 
-def convert_co2_to_miles_driven(co2_saved):
+def convert_co2_to_miles_driven(co2_saved: float) -> float:
     """Converts CO2 emissions to a mileage driven
     equivalent for vehicles in the U.S. using EPA
     methodology:  https://www.epa.gov/energy/greenhouse-gases-equivalencies-calculator-calculations-and-references#miles
@@ -57,26 +57,28 @@ def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
     # Start results dictionary
     res = {}
 
-    # acquire some key objects
-    city = lib.city_from_id(inp.bldg_model_inputs.city_id)
-    fuel = lib.fuel_from_id(inp.bldg_model_inputs.exist_heat_system.heat_fuel_id)
-
     # shortcuts to some of the input structures
     inp_bldg = inp.bldg_model_inputs
     inp_hpc = inp.heat_pump_cost
     inp_econ = inp.economic_inputs
     inp_actual = inp.actual_fuel_use
 
+    # acquire some key objects
+    city = lib.city_from_id(inp.bldg_model_inputs.city_id)
+    fuel = lib.fuel_from_id(inp.bldg_model_inputs.exist_heat_system.heat_fuel_id)
+    elec_util = lib.util_from_id(inp_econ.utility_id)
+
     # If other end uses use the heating fuel, make an estimate of their annual
     # consumption of that fuel.  This figure is expressed in the physical unit
-    # for the fuel type, e.g. gallons of oil.  Save this as an object attribute
-    # so it is accessible in other routines.  See Evernote notes on values (AkWarm
-    # for DHW and Michael Bluejay for Drying and Cooking).
+    # for the fuel type, e.g. gallons of oil.  
+    # See Evernote notes on values (AkWarm for DHW and Michael Bluejay for Drying 
+    # and Cooking).
     is_electric = (fuel.id == ELECTRIC_ID)  # True if Electric
-    fuel_other_uses = inp_bldg.exist_heat_system.serves_dhw * 4.23e6 / fuel.dhw_effic
+    fuel_other_uses = inp_bldg.exist_heat_system.serves_dhw * 4.23e6 / fuel.dhw_effic     # per occupant value
     fuel_other_uses += inp_bldg.exist_heat_system.serves_clothes_drying * (0.86e6 if is_electric else 2.15e6)
     fuel_other_uses += inp_bldg.exist_heat_system.serves_cooking * (0.64e6 if is_electric else 0.8e6)
-    fuel_other_uses *= inp_bldg.exist_heat_system.occupant_count / fuel.btus
+    # assume 3 occupants if no value is provided.
+    fuel_other_uses *= chg_nonnum(inp_bldg.exist_heat_system.occupant_count, 3.0) / fuel.btus
 
     # For elecric heat we also need to account for lights and other applicances not
     # itemized above.
@@ -86,9 +88,6 @@ def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
         lights_other_elec = 2086. + 1.20 * inp_bldg.bldg_floor_area   # kWh in the year
     else:
         lights_other_elec = 0.0
-
-    res['fuel_other_uses'] = fuel_other_uses
-    res['lighs_other_elec'] = lights_other_elec
 
     # Match the existing space heating use if it is provided.  Do so by using
     # the UA true up factor.
@@ -115,8 +114,34 @@ def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
     # Set the UA true up value into the model and also save it as
     # an attribute of this object so it can be observed.
     inp_bldg.ua_true_up = ua_true_up
-
+    
     res['ua_true_up'] = ua_true_up
+
+    # Run the base case with no heat pump and record energy results.
+    # This model only models the space heating end use.
+    bldg_no_hp = inp_bldg.model_copy()
+    bldg_no_hp.heat_pump = None
+    en_base = model_space_heat(bldg_no_hp)
+
+    # Run the model with the heat pump and record energy results
+    en_hp = model_space_heat(inp_bldg)
+
+    # record design heat load and temperature
+    res['design_heat_load'] = en_hp.design_heat_load
+    res['design_heat_temp'] = en_hp.design_heat_temp
+    
+    # Calculate some summary measures
+    res['annual_cop'] = en_hp.annual_results.cop
+    res['hp_max_out_5F'] = inp_bldg.heat_pump.max_out_5f
+    res['max_hp_reached'] = (en_hp.annual_results.hp_capacity_used_max == 1.0)
+    
+    # CO2 savings. If secondary fuel is electric, fuel.co2 is None, so protect against that.
+    co2_base = en_base.annual_results.total_kwh * elec_util.CO2 + en_base.annual_results.secondary_fuel_mmbtu * chg_nonnum(fuel.co2, 0.0)
+    co2_hp = en_hp.annual_results.total_kwh * elec_util.CO2 + en_hp.annual_results.secondary_fuel_mmbtu * chg_nonnum(fuel.co2, 0.0)
+    res['co2_lbs_saved'] = co2_base - co2_hp
+    res['co2_driving_miles_saved'] = convert_co2_to_miles_driven(res['co2_lbs_saved'])
+    
+    res['hp_load_frac'] = en_hp.annual_results.hp_load_mmbtu / (en_hp.annual_results.hp_load_mmbtu + en_hp.annual_results.secondary_load_mmbtu)
 
     return HeatPumpAnalysisResults(**res)
 
