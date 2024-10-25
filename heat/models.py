@@ -55,7 +55,7 @@ class ConventionalHeatingSystem(BaseModel):
     serves_dhw: bool = True               # True if this fuel type heats Domestic Hot Water as well
     serves_clothes_drying: bool = False   # True if this fuel type is used for clothes drying
     serves_cooking: bool = False          # True if this fuel type is used for cooking
-    occupant_count: int | None = None     # Number of occupants for purposes of estimating non-space-heat
+    occupant_count: float | None = None   # Number of occupants for purposes of estimating non-space-heat
                                           #     end uses consumption.
 
 class HeatModelInputs(BaseModel):
@@ -163,5 +163,59 @@ class HeatPumpAnalysisInputs(BaseModel):
 class HeatPumpAnalysisResults(BaseModel):
     """Results from the analysis of installing a heat pump.
     """
-    fuel_other_uses: float = -99.0
-    lights_other_elec: float = -99
+    ua_true_up: float
+    design_heat_load: float
+    design_heat_temp: float
+    annual_cop: float
+    hp_max_out_5F: float
+    max_hp_reached: bool
+    co2_lbs_saved: float
+    co2_driving_miles_saved: float
+    hp_load_frac: float
+
+
+# ------- SAMPLE DATA -------
+
+# For HeatPumpAnalysisinputs
+'''
+{
+	"bldg_model_inputs": {
+		"city_id": 1,
+		"heat_pump": {
+			"hspf_type": "hspf",
+			"hspf": 13.25,
+			"max_out_5f": 11000,
+			"low_temp_cutoff": 5,
+			"off_months": null,
+			"frac_exposed_to_hp": 0.4,
+			"frac_adjacent_to_hp": 0.25,
+			"doors_open_to_adjacent": true,
+			"bedroom_temp_tolerance": "low",
+			"serves_garage": false
+		},
+		"exist_heat_system": {
+			"heat_fuel_id": 2,
+			"heating_effic": 0.8,
+			"aux_elec_use": 3.0,
+			"serves_dhw": true,
+			"serves_clothes_drying": true,
+			"serves_cooking": true,
+			"occupant_count": 2.3
+		},
+		"bldg_floor_area": 3600,
+		"garage_stall_count": 2,
+		"indoor_heat_setpoint": 70,
+		"insul_level": "wall2x6plus"
+	},
+	"heat_pump_cost": {
+		"capital_cost": 4500,
+		"rebate_amount": 1000
+	},
+	"economic_inputs": {
+		"utility_id": 1
+	},
+	"actual_fuel_use": {
+		"secondary_fuel_units": 1600.0
+	}
+}
+'''

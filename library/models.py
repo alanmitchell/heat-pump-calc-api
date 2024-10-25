@@ -59,7 +59,7 @@ class Fuel(BaseModel):
     desc: str                         # Name of fuel
     unit: str                         # Measurement unit of fuel, e.g. 'gallon'
     btus: float                       # BTUs per unit of fuel
-    co2: float | None                 # Pounds of CO2 per unit of fuel
+    co2: float | None                 # Pounds of CO2 per million BTU of fuel
     price_col: str | None             # Name of column in City model that contains the price per unit of this fuel in that City
     dhw_effic: float                  # Average efficiency of a domestic hot water system burning that fuel
     effic_choices: List[Tuple[str, float]]  # Array of (space heating system type, efficiency) for this fuel type
