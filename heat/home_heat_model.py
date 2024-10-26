@@ -15,7 +15,7 @@ from .models import (
 )
 from .hspf_convert import convert_to_hspf
 from library import library as lib
-from general.utils import chg_nonnum, NaNtoNone
+from general.utils import chg_nonnum, nan_to_none
 
 # Some General Constants
 ELECTRIC_ID = 1    # The fuel ID for Electricity
@@ -357,8 +357,8 @@ def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
     tot['total_kw_max'] = dfm['total_kw_max'].max()
 
     # Include monthly and annual results
-    res['monthly_results'] = [HeatTimePeriodResults(**NaNtoNone(row)) for row in dfm.to_dict(orient='records')]
-    res['annual_results'] = NaNtoNone(tot.to_dict())
+    res['monthly_results'] = [HeatTimePeriodResults(**nan_to_none(row)) for row in dfm.to_dict(orient='records')]
+    res['annual_results'] = nan_to_none(tot.to_dict())
 
     # Calculate and record design heating load information
     design_t = tmy_site.site_info.heating_design_temp

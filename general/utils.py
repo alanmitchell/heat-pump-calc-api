@@ -43,8 +43,9 @@ def is_null(val):
 
     return False
 
-def NaNtoNone(obj):
+def nan_to_none(obj):
     """Converts the NaN values found in an object 'obj' into None values. Only
     works objects that can be serialized to JSON.
     """
     return simplejson.loads(simplejson.dumps(obj, ignore_nan=True))
+
