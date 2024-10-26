@@ -3,6 +3,10 @@
 import math
 import numbers
 import simplejson
+from typing import List
+
+import pandas as pd
+from pydantic import BaseModel
 
 def chg_nonnum(val, sub_val):
     """Changes a nan or anything that is not a number to 'sub_val'.  
@@ -48,4 +52,17 @@ def nan_to_none(obj):
     works objects that can be serialized to JSON.
     """
     return simplejson.loads(simplejson.dumps(obj, ignore_nan=True))
+
+def models_to_dataframe(model_list: List[BaseModel]) -> pd.DataFrame:
+    """Converts a list of Pydantic model objects into a Pandas Dataframe.
+    """
+    dict_list = [o.model_dump() for o in model_list]
+    return pd.DataFrame(dict_list)
+
+def dataframe_to_models(df: pd.DataFrame, model: BaseModel, convert_nans: bool = False) -> List[BaseModel]:
+    """Converts a Pandas DataFrame into a List of Pydantic model objects.
+    Optionally convert NaN values in the DataFrame to None values in the Pydantic
+    objects.
+    """
+    return [model(**(rec if not convert_nans else nan_to_none(rec))) for rec in df.to_dict(orient='records')]
 

@@ -15,7 +15,7 @@ from .models import (
 )
 from .hspf_convert import convert_to_hspf
 from library import library as lib
-from general.utils import chg_nonnum, nan_to_none
+from general.utils import nan_to_none, dataframe_to_models
 
 # Some General Constants
 ELECTRIC_ID = 1    # The fuel ID for Electricity
@@ -132,7 +132,7 @@ def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
     # opposed to processing within the hourly loop further below.
     
     tmy_site = lib.tmy_from_id(city.TMYid)
-    hourly_recs = [rec.dict() for rec in tmy_site.records]
+    hourly_recs = [rec.model_dump() for rec in tmy_site.records]
     df_tmy = pd.DataFrame(hourly_recs)
     dfh = df_tmy[['db_temp', 'month']].copy()
     dfh['day_of_year'] = [i for i in range(1, 366) for _ in range(24)]
@@ -357,7 +357,7 @@ def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
     tot['total_kw_max'] = dfm['total_kw_max'].max()
 
     # Include monthly and annual results
-    res['monthly_results'] = [HeatTimePeriodResults(**nan_to_none(row)) for row in dfm.to_dict(orient='records')]
+    res['monthly_results'] = dataframe_to_models(dfm, HeatTimePeriodResults, True)
     res['annual_results'] = nan_to_none(tot.to_dict())
 
     # Calculate and record design heating load information

@@ -17,7 +17,7 @@ import pandas as pd
 import requests
 
 from general.models import Choice
-from general.utils import nan_to_none
+from general.utils import nan_to_none, dataframe_to_models
 from library.models import (
     City, 
     Utility, 
@@ -129,7 +129,7 @@ def fuel_price(fuel_id, city_id) -> FuelPrice:
 def tmys() -> List[TMYmeta]:
     """Returns a list of available TMY sites and associated info.
     """
-    return [TMYmeta(**rec) for rec in df_tmy_meta.reset_index().to_dict(orient='records')]
+    return dataframe_to_models(df_tmy_meta, TMYmeta)
 
 @functools.lru_cache(maxsize=50)    # caches the TMY dataframes cuz retrieved remotely
 def tmy_from_id(tmy_id, site_info_only=False) -> TMYdataset:
@@ -140,7 +140,7 @@ def tmy_from_id(tmy_id, site_info_only=False) -> TMYdataset:
     if not site_info_only:
         df_records = get_df(f'tmy3/{tmy_id}.pkl')
         df_records['hour'] = list(range(0, 24)) * 365
-        recs = [TMYhourlyRec(**rec) for rec in df_records.to_dict(orient='records')]
+        recs = dataframe_to_models(df_records, TMYhourlyRec)
         return TMYdataset(site_info=site_info, records=recs)
     else:
         return TMYdataset(site_info=site_info)
