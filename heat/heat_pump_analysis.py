@@ -17,7 +17,7 @@ from .models import HeatPumpAnalysisInputs, HeatPumpAnalysisResults
 from .home_heat_model import model_space_heat, ELECTRIC_ID, determine_ua_true_up
 from .elec_cost import ElecCostCalc
 import library.library as lib
-from general.utils import is_null, chg_nonnum
+from general.utils import is_null, chg_nonnum, models_to_dataframe
 
 # --------- Some Constants
 
@@ -73,16 +73,16 @@ def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
     # for the fuel type, e.g. gallons of oil.  
     # See Evernote notes on values (AkWarm for DHW and Michael Bluejay for Drying 
     # and Cooking).
-    is_electric = (fuel.id == ELECTRIC_ID)  # True if Electric
+    is_electric_heat = (fuel.id == ELECTRIC_ID)  # True if Electric
     fuel_other_uses = inp_bldg.exist_heat_system.serves_dhw * 4.23e6 / fuel.dhw_effic     # per occupant value
-    fuel_other_uses += inp_bldg.exist_heat_system.serves_clothes_drying * (0.86e6 if is_electric else 2.15e6)
-    fuel_other_uses += inp_bldg.exist_heat_system.serves_cooking * (0.64e6 if is_electric else 0.8e6)
+    fuel_other_uses += inp_bldg.exist_heat_system.serves_clothes_drying * (0.86e6 if is_electric_heat else 2.15e6)
+    fuel_other_uses += inp_bldg.exist_heat_system.serves_cooking * (0.64e6 if is_electric_heat else 0.8e6)
     # assume 3 occupants if no value is provided.
     fuel_other_uses *= chg_nonnum(inp_bldg.exist_heat_system.occupant_count, 3.0) / fuel.btus
 
     # For elecric heat we also need to account for lights and other applicances not
     # itemized above.
-    if is_electric:
+    if is_electric_heat:
         # Use the AkWarm Medium Lights/Appliances formula but take 25% off
         # due to efficiency improvements since then.
         lights_other_elec = 2086. + 1.20 * inp_bldg.bldg_floor_area   # kWh in the year
@@ -96,25 +96,28 @@ def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
         # Remove the energy use from the other end uses that use the fuel, unless
         # this is electric heat and the user indicated that the entered value is
         # just space heating.
-        if is_electric and inp.actual_fuel_use.annual_electric_is_just_space_heat:
+        if is_electric_heat and inp.actual_fuel_use.annual_electric_is_just_space_heat:
             # user explicitly indicated that the entered annual usage value is
             # just space heating.
             space_fuel_use = inp.actual_fuel_use.secondary_fuel_units
         else:
             space_fuel_use = inp.actual_fuel_use.secondary_fuel_units - fuel_other_uses
-            if is_electric:
+            if is_electric_heat:
                 # if electric heat, also need to subtract out other lights and appliances
                 space_fuel_use -= lights_other_elec
 
         ua_true_up = determine_ua_true_up(inp_bldg, space_fuel_use)
 
+    elif inp_actual.electric_use_by_month and is_electric_heat:
+        # it's electric heat and there are monthly actuals. Use these to true-up.
+        space_fuel_use = sum(inp_actual.electric_use_by_month) - fuel_other_uses - lights_other_elec
+        ua_true_up = determine_ua_true_up(inp_bldg, space_fuel_use)
+
     else:
         ua_true_up = 1.0
         
-    # Set the UA true up value into the model and also save it as
-    # an attribute of this object so it can be observed.
+    # Set the UA true up value into the model and also add it to results.
     inp_bldg.ua_true_up = ua_true_up
-    
     res['ua_true_up'] = ua_true_up
 
     # Run the base case with no heat pump and record energy results.
@@ -141,6 +144,102 @@ def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
     res['co2_lbs_saved'] = co2_base - co2_hp
     res['co2_driving_miles_saved'] = convert_co2_to_miles_driven(res['co2_lbs_saved'])
 
+    # Determine fraction of space heating load served by heat pump.
     res['hp_load_frac'] = en_hp.annual_results.hp_load_mmbtu / (en_hp.annual_results.hp_load_mmbtu + en_hp.annual_results.secondary_load_mmbtu)
 
+    # -------- Monthly cash flow analysis
+
+    # Make dataframes of monthly space heating results
+    df_mo_en_base = models_to_dataframe(en_base.monthly_results)
+    df_mo_en_hp = models_to_dataframe(en_hp.monthly_results)
+
+    # start some cash flow dataframes, with just the 'period' (month) column initially
+    df_mo_dol_base = dfb = df_mo_en_base[['period']].copy()
+    df_mo_dol_hp = dfh = df_mo_en_base[['period']].copy()
+
+    # Determine the base electric use by month.  Approach is different 
+    # if there is electric heat. This is only important for dealing with
+    # block rate structures and PCE. The actual kWh and kW deltas determined
+    # from the space heating modeling will be added to this base electric use
+    # to determine the impact of the heat pump.
+    if not is_electric_heat:
+        # Fuel-based space heat.
+        # Either the User supplies a full 12-month array of electric use, which
+        # should be used outright, or they supply no array of use. In the no data
+        # case, use the default values provided in the City record.
+        if inp_actual.electric_use_by_month:
+            dfb['elec_kwh'] = inp_actual.electric_use_by_month.copy()
+        else:
+            dfb['elec_kwh'] =  city.avg_elec_usage.copy()
+
+        # rough estimate of a base demand: not super critical, as the demand rate 
+        # structure does not have blocks.  Assume a load factor of 0.4
+        dfb['elec_kw'] = dfb.elec_kwh / (DAYS_IN_MONTH * 24.0) / 0.4
+
+    else:
+        # Electric Heat Case
+        if inp_actual.electric_use_by_month:
+            # actual use by month was provided
+            dfb['elec_kwh'] = inp_actual.electric_use_by_month.copy()
+
+        else:
+
+            # No monthly electric use provided.  But, an annual electric use figure
+            # might be provided.
+            if inp_actual.secondary_fuel_units:
+                if inp_actual.annual_electric_is_just_space_heat:
+                    # the provided value is just electric space heat. First spread it out according
+                    # to the modeled electric space heat.
+                    scaler = inp_actual.secondary_fuel_units / df_mo_en_base.total_kwh.sum()
+                    elec_kwh = scaler * df_mo_en_base.total_kwh.values
+
+                    # add in any DHW, Clothes Drying and Cooking provided by electricity.
+                    elec_kwh += fuel_other_uses / 8760.0 * DAYS_IN_MONTH * 24.0
+
+                    # add in lights and other misc. appliances, with some monthly variation.
+                    elec_kwh += lights_other_elec / 8760.0 * LIGHTS_OTHER_PAT * DAYS_IN_MONTH * 24.0
+
+                else:
+                    # provided value is total electric kWh.  Scale modeled values of space heat, 
+                    # other big uses, and misc. lights and appliances to match.
+                    # NOTE: the .copy() method is *important*, otherwise elec_kwh is just a
+                    # reference to the underlying numpy array of the original Dataframe, and 
+                    # subsequent changes to elec_kwh change the original Dataframe!!
+                    elec_kwh = df_mo_en_base.total_kwh.values.copy()
+
+                    # add in any DHW, Clothes Drying and Cooking provided by electricity.
+                    elec_kwh += fuel_other_uses / 8760.0 * DAYS_IN_MONTH * 24.0
+
+                    # add in lights and other misc. appliances, with some monthly variation.
+                    elec_kwh += lights_other_elec / 8760.0 * LIGHTS_OTHER_PAT * DAYS_IN_MONTH * 24.0
+
+                    # scale to provided annual total
+                    scaler = inp_actual.secondary_fuel_units / elec_kwh.sum()
+                    elec_kwh *= scaler
+
+            else:
+                # No annual value provided. Build up electric use from space heat and
+                # other electric uses.
+
+                # Space heating kWh
+                elec_kwh = df_mo_en_base.total_kwh.values.copy()
+
+                # DHW, Clothes Drying and Cooking.  Assume flat use through year.
+                # This is a numpy array because DAYS_IN_MONTH is an array.
+                elec_kwh += fuel_other_uses / 8760.0 * DAYS_IN_MONTH * 24.0
+
+                # Now lights and other misc. appliances. Some monthly variation, given
+                # by LIGHTS_OTHER_PAT.
+                elec_kwh += lights_other_elec / 8760.0 * LIGHTS_OTHER_PAT * DAYS_IN_MONTH * 24.0
+
+            # store results
+            dfb['elec_kwh'] =  elec_kwh
+
+        # Monthly load factor is pretty high for electric heat, about 0.63 in winter 
+        # months.
+        dfb['elec_kw'] =  dfb['elec_kwh'] / (DAYS_IN_MONTH * 24.0) / 0.63
+
+    # breakpoint()
+    print(dfb)
+    print(dfb.elec_kwh.sum())
     return HeatPumpAnalysisResults(**res)
