@@ -129,8 +129,8 @@ class EconomicInputs(BaseModel):
     pce_rate_override: float | None = None          # Overrides the PCE rate in the Utility rate schedule
     customer_charge_override: float | None = None   # Overrides Utility customer charge
     co2_lbs_per_kwh_override: float | None = None   # Overrides Utility CO2 pounds per kWh of Utility electricity
-    fuel_cost_override: float | None = None         # Overrides the fuel cost for the city.
-    fuel_cost_forecast_pattern: List[float] = [1.0] # A list of fuel price multipliers for years spanning heat pump life
+    fuel_price_override: float | None = None         # Overrides the fuel price1 for the city.
+    fuel_price_forecast_pattern: List[float] = [1.0] # A list of fuel price multipliers for years spanning heat pump life
                                                     #    If shorter than heat pump life, last value is extended.
     sales_tax_override: float | None = None         # Overrides sales tax (city + borough) for the city
     discount_rate: float = 0.03                     # Economic discount rate as a fraction for Present Value

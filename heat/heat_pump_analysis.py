@@ -15,7 +15,7 @@ import numpy_financial as npf
 
 from .models import HeatPumpAnalysisInputs, HeatPumpAnalysisResults
 from .home_heat_model import model_space_heat, ELECTRIC_ID, determine_ua_true_up
-from .elec_cost import ElecCostCalc
+from econ.elec_cost import ElecCostCalc
 import library.library as lib
 from general.utils import is_null, chg_nonnum, models_to_dataframe
 
@@ -147,7 +147,7 @@ def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
     # Determine fraction of space heating load served by heat pump.
     res['hp_load_frac'] = en_hp.annual_results.hp_load_mmbtu / (en_hp.annual_results.hp_load_mmbtu + en_hp.annual_results.secondary_load_mmbtu)
 
-    # -------- Monthly cash flow analysis
+    # -------- Monthly cash flow analysis - Determine Base Electric Use
 
     # Make dataframes of monthly space heating results
     df_mo_en_base = models_to_dataframe(en_base.monthly_results)
@@ -239,7 +239,62 @@ def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
         # months.
         dfb['elec_kw'] =  dfb['elec_kwh'] / (DAYS_IN_MONTH * 24.0) / 0.63
 
-    # breakpoint()
+    #---------- Calculate Monthly Electric and Fuel Costs
+
+    # Make an object to calculate electric utility costs
+    sales_tax = chg_nonnum(
+        inp_econ.sales_tax_override, 
+        chg_nonnum(city.MunicipalSalesTax, 0.0) + chg_nonnum(city.BoroughSalesTax, 0.0)
+        )
+    elec_cost_calc = ElecCostCalc(elec_util, sales_tax=sales_tax, pce_limit=inp_econ.pce_limit)
+    # cost function that will be applied to each row of the cost DataFrame
+    cost_func = lambda r: elec_cost_calc.monthly_cost(r.elec_kwh, r.elec_kw)
+
+    dfb['elec_dol'] = dfb.apply(cost_func, axis=1)
+
+    if not is_electric_heat:
+        # Now fuel use by month.  Remember that the home heat model only looked at
+        # space heating, so we need to add in the fuel use from the other end uses
+        # that use this fuel.
+        fuel_price = chg_nonnum(
+            inp_econ.fuel_price_override, 
+            lib.fuel_price(inp_bldg.exist_heat_system.heat_fuel_id, city.id).price
+            )
+        dfb['secondary_fuel_units'] = df_mo_en_base.secondary_fuel_units + \
+            fuel_other_uses / 12.0
+        dfb['secondary_fuel_dol'] = dfb.secondary_fuel_units * fuel_price * (1. + sales_tax)
+
+    else:
+        # Electric Heat, so no secondary fuel
+        dfb['secondary_fuel_units'] = 0.0
+        dfb['secondary_fuel_dol'] = 0.0
+
+    # Total Electric + space heat
+    dfb['total_dol'] =  dfb.elec_dol + dfb.secondary_fuel_dol
+
+    # Now with the heat pump
+    # determine extra kWh used in the heat pump scenario. Note, this will
+    # be negative numbers if the base case used electric heat.
+    extra_kwh = (df_mo_en_hp.total_kwh - df_mo_en_base.total_kwh).values
+    dfh['elec_kwh'] = dfb['elec_kwh'] + extra_kwh
+    extra_kw = (df_mo_en_hp.total_kw_max - df_mo_en_base.total_kw_max).values
+    dfh['elec_kw'] =  dfb['elec_kw'] + extra_kw
+    dfh['elec_dol'] = dfh.apply(cost_func, axis=1)
+
+    # Now fuel, including other end uses using the heating fuel
+    if not is_electric_heat:
+        dfh['secondary_fuel_units'] = df_mo_en_hp.secondary_fuel_units + \
+            fuel_other_uses / 12.0
+        dfh['secondary_fuel_dol'] = dfh.secondary_fuel_units * fuel_price * (1. + sales_tax)
+
+    else:
+        # Electric Heat, so no secondary fuel
+        dfh['secondary_fuel_units'] = 0.0
+        dfh['secondary_fuel_dol'] = 0.0
+
+    # Total Electric + space heat
+    dfh['total_dol'] =  dfh.elec_dol + dfh.secondary_fuel_dol
+
     print(dfb)
-    print(dfb.elec_kwh.sum())
+    print(dfh)
     return HeatPumpAnalysisResults(**res)
