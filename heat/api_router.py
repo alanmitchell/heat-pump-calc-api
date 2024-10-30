@@ -1,4 +1,4 @@
-"""Defines the API for the Library functions."""
+"""Defines the API for the Space Heat and Heat Pump modeling functions."""
 from fastapi import APIRouter
 
 from . import home_heat_model as heat

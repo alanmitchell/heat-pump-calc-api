@@ -1,8 +1,7 @@
 """Provides a class to calculate a total monthly electric utility cost
 given a block rate structure, possibly including PCE. 
 """
-from math import nan, isnan, inf
-import library.library as lib
+from math import inf
 from general.utils import chg_nonnum
 
 class ElecCostCalc:

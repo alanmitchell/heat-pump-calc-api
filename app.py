@@ -3,6 +3,7 @@ from starlette.staticfiles import StaticFiles
 
 import library.api_router
 import heat.api_router
+import econ.api_router
 from general.models import Version
 
 VERSION = '0.1'
@@ -27,6 +28,10 @@ tags_metadata = [
     {
         "name": "Heating Models",
         "description": "Space Heating and Heat Pump Models."
+    },
+    {
+        "name": "Economic Analysis",
+        "description": "Economic Analysis Functions"
     }
 ]
 
@@ -54,3 +59,6 @@ app.include_router(library.api_router.router)
 
 # routes to heating and heat pump models.
 app.include_router(heat.api_router.router)
+
+# routes to economic analysis functions.
+app.include_router(econ.api_router.router)

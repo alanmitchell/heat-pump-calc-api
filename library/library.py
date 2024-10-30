@@ -136,7 +136,7 @@ def tmy_from_id(tmy_id, site_info_only=False) -> TMYdataset:
     """Returns a list of TMY hourly records and meta data for the climate site identified
     by 'tmy_id'.
     """
-    site_info = TMYmeta(tmy_id=tmy_id, **df_tmy_meta.loc[tmy_id].to_dict())
+    site_info = TMYmeta(**df_tmy_meta.loc[tmy_id].to_dict())
     if not site_info_only:
         df_records = get_df(f'tmy3/{tmy_id}.pkl')
         df_records['hour'] = list(range(0, 24)) * 365
@@ -165,6 +165,7 @@ def refresh_data():
 
     # read in the DataFrame that describes the available TMY3 climate files.
     df_tmy_meta = get_df('tmy3/tmy3_meta.pkl')
+    df_tmy_meta['tmy_id'] = df_tmy_meta.index.values
 
     # Read in the other City and Utility Excel files.
     df_city = get_df('city.pkl')
