@@ -5,6 +5,8 @@ from enum import Enum
 
 from pydantic import BaseModel
 
+from econ.models import CashFlowAnalysis
+
 # ----------- Enums
 
 class HSPFtype(str, Enum):
@@ -133,8 +135,8 @@ class EconomicInputs(BaseModel):
     fuel_price_forecast_pattern: List[float] = [1.0] # A list of fuel price multipliers for years spanning heat pump life
                                                     #    If shorter than heat pump life, last value is extended.
     sales_tax_override: float | None = None         # Overrides sales tax (city + borough) for the city
-    discount_rate: float = 0.03                     # Economic discount rate as a fraction for Present Value
-                                                    #    calculations, inflation-adjusted, 0.03 for 3% / year
+    discount_rate: float = 0.0537                     # Economic discount rate as a fraction for Present Value
+                                                    #    calculations, nominal rate, 0.06 for 6%/year
     inflation_rate: float = 0.023                   # General inflation rate, expressed as a fraction, 0.02 for 2% / year
 
 class ActualFuelUse(BaseModel):
@@ -175,6 +177,7 @@ class HeatPumpAnalysisResults(BaseModel):
     co2_lbs_saved: float
     co2_driving_miles_saved: float
     hp_load_frac: float
+    econ: CashFlowAnalysis
 
 
 # ------- SAMPLE DATA -------

@@ -24,7 +24,6 @@ from library.models import (
     Fuel, 
     FuelPrice, 
     TMYmeta, 
-    TMYhourlyRec, 
     TMYdataset
 )
 
@@ -140,8 +139,8 @@ def tmy_from_id(tmy_id, site_info_only=False) -> TMYdataset:
     if not site_info_only:
         df_records = get_df(f'tmy3/{tmy_id}.pkl')
         df_records['hour'] = list(range(0, 24)) * 365
-        recs = dataframe_to_models(df_records, TMYhourlyRec)
-        return TMYdataset(site_info=site_info, records=recs)
+        recs_dict = df_records.to_dict(orient='list')
+        return TMYdataset(site_info=site_info, hourly_data=recs_dict)
     else:
         return TMYdataset(site_info=site_info)
 

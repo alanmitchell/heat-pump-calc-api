@@ -1,6 +1,6 @@
 """Models related to the Library.
 """
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 from pydantic import BaseModel
 
 from general.models import Choice
@@ -86,15 +86,7 @@ class TMYmeta(BaseModel):
     wind_spd_avg: float       # annual avcerage wind speed, miles per hour
     heating_design_temp: float  # 99% heating design temperature, deg F
 
-class TMYhourlyRec(BaseModel):
-    """TMY data for one hour of the dataset."""
-    db_temp: float        # dry-bulb temperature, deg F
-    rh: float             # relative humidity, percent 0 - 100
-    wind_spd: float       # wind speed, miles per hour
-    month: int            # month, 1 - 12
-    hour: int             # hour, 0 - 23
-
 class TMYdataset(BaseModel):
     site_info: TMYmeta    # site information, see TMYmeta definition
-    records: Optional[List[TMYhourlyRec]] = None     # list of hourly data of type TMYhourlyRec
+    hourly_data: Dict[str, List[float | int]] | None = None     # dictionary of hourly data, keys are column names
 

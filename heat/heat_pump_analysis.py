@@ -2,20 +2,14 @@
 installing a heat pump in a building. This module uses the space heating model
 (model_space_heat()) found in the "home_heat_model" module.
 """
-from pprint import pformat
-import inspect
-from pathlib import Path
-import pickle
-import time
-import gzip
-
-import pandas as pd
 import numpy as np
 import numpy_financial as npf
 
 from .models import HeatPumpAnalysisInputs, HeatPumpAnalysisResults
 from .home_heat_model import model_space_heat, ELECTRIC_ID, determine_ua_true_up
+import econ.econ
 from econ.elec_cost import ElecCostCalc
+from econ.models import InitialAmount, EscalatingFlow, PatternFlow, CashFlowInputs
 import library.library as lib
 from general.utils import is_null, chg_nonnum, models_to_dataframe
 
@@ -31,13 +25,6 @@ DAYS_IN_MONTH = np.array([
 LIGHTS_OTHER_PAT = np.array([
     1.13, 1.075, 1.0, 0.925, 0.87, 0.85, 0.87, 0.925, 1.0, 1.075, 1.13, 1.15
 ])
-
-def make_pattern(esc, life):
-    """Makes a numpy array of length (life + 1) containing an escalation pattern
-    that starts with a 1.0 in year 1 and escalates at the rate of 'esc' per year.
-    """
-    pat = np.ones(life - 1) * (1 + esc)
-    return np.insert(pat.cumprod(), 0, [0.0, 1.0])
 
 def convert_co2_to_miles_driven(co2_saved: float) -> float:
     """Converts CO2 emissions to a mileage driven
@@ -154,8 +141,8 @@ def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
     df_mo_en_hp = models_to_dataframe(en_hp.monthly_results)
 
     # start some cash flow dataframes, with just the 'period' (month) column initially
-    df_mo_dol_base = dfb = df_mo_en_base[['period']].copy()
-    df_mo_dol_hp = dfh = df_mo_en_base[['period']].copy()
+    dfb = df_mo_en_base[['period']].copy()
+    dfh = df_mo_en_base[['period']].copy()
 
     # Determine the base electric use by month.  Approach is different 
     # if there is electric heat. This is only important for dealing with
@@ -295,6 +282,50 @@ def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
     # Total Electric + space heat
     dfh['total_dol'] =  dfh.elec_dol + dfh.secondary_fuel_dol
 
-    print(dfb)
-    print(dfh)
+    # ---------------- Cash Flow Analysis
+
+    # determine the changes caused by the heat pump on an annual basis.
+    # First calculate annual totals for base case and heat pump case and
+    # then calculate the change.
+    numeric_cols = dfb.select_dtypes(include='number').columns
+    ann_base = dfb[numeric_cols].sum()
+    ann_hp = dfh[numeric_cols].sum()
+    ann_chg = ann_hp - ann_base
+
+    # List of cash flow items
+    cash_flow_items = []
+
+    # Initial year impacts
+    frac_fin = inp_hpc.frac_financed
+    hp_cost = inp_hpc.capital_cost
+    if frac_fin > 0.0:
+        # Loan is being used. Fraction financed applies to full heat pump cost.
+        cash_flow_items.append(
+            InitialAmount(label='Heat Pump Downpayment', amount=-(1.- frac_fin) * hp_cost)
+        )
+        # loan payment
+        loan_pmt = npf.pmt(inp_hpc.loan_interest, inp_hpc.loan_term, hp_cost * frac_fin)
+        # above function produces negative number already
+        cash_flow_items.append(
+            EscalatingFlow(label='Loan Payment', amount=loan_pmt, 
+                           escalation_rate=0.0, end_year=inp_hpc.loan_term)
+        )
+    else:
+        cash_flow_items.append(
+            InitialAmount(label='Heat Pump Cost', amount=-hp_cost)
+        )
+    if inp_hpc.rebate_amount > 0.0:
+        cash_flow_items.append(
+            InitialAmount(label='Rebate', amount=inp_hpc.rebate_amount)
+        )
+
+    econ_inp = CashFlowInputs(
+        duration=inp_hpc.heat_pump_life,
+        discount_rate=inp_econ.discount_rate,
+        cash_flow_items=cash_flow_items
+    )
+
+    res['econ'] = econ.econ.analyze_cash_flow(econ_inp)
+
+
     return HeatPumpAnalysisResults(**res)

@@ -3,11 +3,10 @@ from typing import List, Dict
 from fastapi import APIRouter
 
 from . import econ
-from .models import Test1, Test2
+from .models import CashFlowInputs, CashFlowAnalysis
 
 router = APIRouter()
 
-@router.post("/econ/test", tags=['Economic Analysis'])
-async def test(inp: List[Test1 | Test2]) -> List[str]:
-
-    return [str(type(it)) for it in inp]
+@router.post("/econ/analyze-cash-flows", response_model=CashFlowAnalysis, tags=['Economic Analysis'])
+async def analyze_cash_flow(flows: CashFlowInputs) -> CashFlowAnalysis:
+    return econ.analyze_cash_flow(flows)

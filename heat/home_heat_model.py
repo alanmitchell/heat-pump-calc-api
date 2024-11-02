@@ -132,8 +132,7 @@ def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
     # opposed to processing within the hourly loop further below.
     
     tmy_site = lib.tmy_from_id(city.TMYid)
-    hourly_recs = [rec.model_dump() for rec in tmy_site.records]
-    df_tmy = pd.DataFrame(hourly_recs)
+    df_tmy = pd.DataFrame(tmy_site.hourly_data)
     dfh = df_tmy[['db_temp', 'month']].copy()
     dfh['day_of_year'] = [i for i in range(1, 366) for _ in range(24)]
 
