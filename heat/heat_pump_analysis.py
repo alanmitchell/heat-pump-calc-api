@@ -55,6 +55,20 @@ def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
     fuel = lib.fuel_from_id(inp.bldg_model_inputs.exist_heat_system.heat_fuel_id)
     elec_util = lib.util_from_id(inp_econ.utility_id)
 
+    # Some of the fields in the electric utility object may be overridden.
+    # Adjust the object now.
+    if inp_econ.elec_rate_override is not None:
+        # overwrite the block structure with one block
+        elec_util.Blocks = [(None, inp_econ.elec_rate_override)]
+        # zero out the demand charge as that is included in the overridden electric rate.
+        elec_util.DemandCharge = 0.0
+    if inp_econ.pce_rate_override is not None:
+        elec_util.PCE = inp_econ.pce_rate_override
+    if inp_econ.customer_charge_override is not None:
+        elec_util.CustomerChg = inp_econ.customer_charge_override
+    if inp_econ.co2_lbs_per_kwh_override is not None:
+        elec_util.CO2 = inp_econ.co2_lbs_per_kwh_override
+
     # If other end uses use the heating fuel, make an estimate of their annual
     # consumption of that fuel.  This figure is expressed in the physical unit
     # for the fuel type, e.g. gallons of oil.  
@@ -319,13 +333,51 @@ def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
             InitialAmount(label='Rebate', amount=inp_hpc.rebate_amount)
         )
 
+    # Electricity cost impacts
+    # determine whether and escalation rate or pattern was provided
+    if type(inp_econ.elec_rate_forecast) == float:
+        # escalation rate
+        cash_flow_items.append(
+            EscalatingFlow(label='Electricity Cost', amount=-ann_chg.elec_dol,
+                escalation_rate=inp_econ.elec_rate_forecast)
+        )
+    else:
+        # A price pattern was provided, but the provided pattern starts at Year 1.
+        # Add a Year 0 value.
+        cash_flow_items.append(
+            PatternFlow(label='Electricity Cost', amount=-ann_chg.elec_dol,
+                pattern=[0.0] + inp_econ.elec_rate_forecast)
+        )
+  
+    # Fuel cost impacts, if present (may be electric heat)
+    if ann_chg.secondary_fuel_dol != 0.0:
+        # determine whether and escalation rate or pattern was provided
+        if type(inp_econ.fuel_price_forecast) == float:
+            # escalation rate
+            cash_flow_items.append(
+                EscalatingFlow(label='Fuel Cost', amount=-ann_chg.secondary_fuel_dol,
+                    escalation_rate=inp_econ.fuel_price_forecast)
+            )
+        else:
+            # A price pattern was provided, but the provided pattern starts at Year 1.
+            # Add a Year 0 value.
+            cash_flow_items.append(
+                PatternFlow(label='Fuel Cost', amount=-ann_chg.secondary_fuel_dol,
+                    pattern=[0.0] + inp_econ.fuel_price_forecast)
+            )
+
+    # include the operating cost change
+    cash_flow_items.append(
+        EscalatingFlow(label='Operating Cost Change', amount=-inp_hpc.op_cost_chg,
+                       escalation_rate=inp_econ.inflation_rate)
+    )
+
+    # Analyze the cash flows
     econ_inp = CashFlowInputs(
         duration=inp_hpc.heat_pump_life,
         discount_rate=inp_econ.discount_rate,
         cash_flow_items=cash_flow_items
     )
-
     res['econ'] = econ.econ.analyze_cash_flow(econ_inp)
-
 
     return HeatPumpAnalysisResults(**res)

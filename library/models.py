@@ -46,7 +46,7 @@ class Utility(BaseModel):
     Name: str                            # Name of the rate schedule
     Type: int                            # 1 = Electricity, 2 = Natural Gas
     IsCommercial: bool                   # True if Commercial rate structure, False if Residential
-    ChargesRCC: bool                     # True if utility collects the Alaska RCC Regulatory surcharge
+    ChargesRCC: bool                     # True if utility collects the Alaska RCC Regulatory surcharge.
     PCE: float | None                    # Alaska PCE $/kWh assistance
     CO2: float | None                    # pound-CO2/kWh for electric rate structures
     CustomerChg: float | None            # $/month customer charge
