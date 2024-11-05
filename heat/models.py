@@ -120,20 +120,31 @@ class EconomicInputs(BaseModel):
     """ Inputs related to fuel and electricity costs and economic analysis factors.
     """
     utility_id: int                          # ID of the electric utility rate schedule serving the building
-    include_pce: bool = True                 # If True, PCE assistance will be included for this building
-    pce_limit: float = 750.0                 # kWh limit per month for PCE assistance
-    elec_rate_forecast_pattern: List[float] = [1.0]   # A list of electric price multipliers for the years
-                                                      #    spanning the life the of the heat pump. If the list is
-                                                      #    shorter than the life, the last value is extended for 
-                                                      #    missing years.
+    # kWh limit per month for PCE assistance. Set to 0 if no PCE for bldg, or None if no limit to the
+    # PCE the building can receive (e.g. community building)
+    pce_limit: float | None = 750.0
+
+    # If this value is single floating point number, then it is considered to be the escalation
+    # rate of electric prices, e.g. 0.03 means 3% / year escalation.  If it is a list of values, then
+    # it is considered to be a list of electric price multipliers for the years spanning the life 
+    # the of the heat pump. If the list is shorter than the life, the last value is extended for 
+    # the missing years. An example would be [1.0, 1.03, 1.05, 1.08, 1.10].
+    elec_rate_forecast: float | List[float] = 0.023
+
     elec_rate_override: float | None = None         # If provided, overrides the electric energy and demand 
                                                     #    charges in the Utility rate schedule
     pce_rate_override: float | None = None          # Overrides the PCE rate in the Utility rate schedule
     customer_charge_override: float | None = None   # Overrides Utility customer charge
     co2_lbs_per_kwh_override: float | None = None   # Overrides Utility CO2 pounds per kWh of Utility electricity
     fuel_price_override: float | None = None         # Overrides the fuel price1 for the city.
-    fuel_price_forecast_pattern: List[float] = [1.0] # A list of fuel price multipliers for years spanning heat pump life
-                                                    #    If shorter than heat pump life, last value is extended.
+
+    # If this value is single floating point number, then it is considered to be the escalation
+    # rate of fuel prices, e.g. 0.03 means 3% / year escalation.  If it is a list of values, then
+    # it is considered to be a list of fuel price multipliers for the years spanning the life 
+    # the of the heat pump. If the list is shorter than the life, the last value is extended for 
+    # the missing years.
+    fuel_price_forecast: float | List[float] = 0.033 
+
     sales_tax_override: float | None = None         # Overrides sales tax (city + borough) for the city
     discount_rate: float = 0.0537                     # Economic discount rate as a fraction for Present Value
                                                     #    calculations, nominal rate, 0.06 for 6%/year
