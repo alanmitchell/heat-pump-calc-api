@@ -8,7 +8,7 @@ import pandas as pd
 
 from .models import (
     HeatModelInputs,
-    HeatTimePeriodResults,
+    TimePeriodResults,
     HeatModelResults, 
     WallInsulLevel, 
     TemperatureTolerance,
@@ -156,7 +156,7 @@ def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
         # the HSPF adjustment here is not linear, but instead dampened by raising
         # the ratio to the 0.5 power.  This was a judgement call.
 
-        # ** TO DO **: Convert other HSPF values into old HSPF
+        # Convert other HSPF values into old HSPF
         hspf_old = convert_to_hspf(inp.heat_pump.hspf, inp.heat_pump.hspf_type)
 
         cops_fit_adj = COPS_FIT * (hspf_old / BASE_HSPF) ** 0.5
@@ -316,12 +316,15 @@ def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
 
     # Make a column for total kWh.  Do this at the hourly level because it is
     # needed to accurately account for coincident peak demand.
-    dfh['total_kwh'] = dfh.hp_kwh + dfh.secondary_kwh
+    dfh['space_heat_kwh'] = dfh.hp_kwh + dfh.secondary_kwh
 
     # Store annual and monthly totals.
     # Annual totals is a Pandas Series.
-    total_cols = ['hp_load_mmbtu', 'secondary_load_mmbtu', 'hp_kwh', 'secondary_fuel_mmbtu', 'secondary_kwh', 'total_kwh']
+    total_cols = ['hp_load_mmbtu', 'secondary_load_mmbtu', 'hp_kwh', 'secondary_fuel_mmbtu', 'secondary_kwh', 'space_heat_kwh']
     dfm = dfh.groupby('month')[total_cols].sum()
+
+    # Add a column for the fraction of the total heat load served by the heat pump.
+    dfm['hp_load_frac'] = dfm.hp_load_mmbtu / (dfm.hp_load_mmbtu + dfm.secondary_load_mmbtu)
 
     # Add a column for the fraction of heat pump capacity used, maximum across hours
     dfm['hp_capacity_used_max'] = dfh.groupby('month')[['hp_capacity_used']].max()
@@ -329,7 +332,7 @@ def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
     # Add in columns for the peak electrical demand during the month
     dfm['hp_kw_max'] = dfh.groupby('month')[['hp_kwh']].max()
     dfm['secondary_kw_max'] = dfh.groupby('month')[['secondary_kwh']].max()
-    dfm['total_kw_max'] = dfh.groupby('month')[['total_kwh']].max()  # can't add the above cuz of coincidence
+    dfm['space_heat_kw_max'] = dfh.groupby('month')[['space_heat_kwh']].max()  # can't add the above cuz of coincidence
 
     # physical units for secondary fuel
     fuel = exist_heat_fuel    # shortcut variable
@@ -345,18 +348,19 @@ def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
     dfm['period'] = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     tot['period'] = 'Annual'
 
-    # Fix the seasonal COP and the maximum values
+    # Fix the seasonal COP, the heat pump load fraction, and the maximum values
     if tot.hp_kwh:
         tot['cop'] =  tot.hp_load_mmbtu * 1e6 / tot.hp_kwh / 3412.
     else:
         tot['cop'] = np.nan
+    tot['hp_load_frac'] = tot.hp_load_mmbtu / (tot.hp_load_mmbtu + tot.secondary_load_mmbtu)
     tot['hp_capacity_used_max'] = dfm['hp_capacity_used_max'].max()
     tot['hp_kw_max'] = dfm['hp_kw_max'].max()    
     tot['secondary_kw_max'] = dfm['secondary_kw_max'].max()
-    tot['total_kw_max'] = dfm['total_kw_max'].max()
+    tot['space_heat_kw_max'] = dfm['space_heat_kw_max'].max()
 
     # Include monthly and annual results
-    res['monthly_results'] = dataframe_to_models(dfm, HeatTimePeriodResults, True)
+    res['monthly_results'] = dataframe_to_models(dfm, TimePeriodResults, True)
     res['annual_results'] = nan_to_none(tot.to_dict())
 
     # Calculate and record design heating load information

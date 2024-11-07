@@ -57,7 +57,7 @@ class ConventionalHeatingSystem(BaseModel):
     serves_dhw: bool = True               # True if this fuel type heats Domestic Hot Water as well
     serves_clothes_drying: bool = False   # True if this fuel type is used for clothes drying
     serves_cooking: bool = False          # True if this fuel type is used for cooking
-    occupant_count: float | None = None   # Number of occupants for purposes of estimating non-space-heat
+    occupant_count: float = 3.0           # Number of occupants for purposes of estimating non-space-heat
                                           #     end uses consumption.
 
 class HeatModelInputs(BaseModel):
@@ -76,9 +76,10 @@ class HeatModelInputs(BaseModel):
     # calculation process. They are given default values.
     ua_true_up: float = 1.0          # used to true up calculation to actual fuel use. Multiplies the UA determined from insulation level.
 
-class HeatTimePeriodResults(BaseModel):
+class TimePeriodResults(BaseModel):
     period: str                # time period being reported on, e.g. "Jan" for January, "Annual" for full year
     hp_load_mmbtu: float       # heat load in MMBTU served by heat pump
+    hp_load_frac: float        # fraction of the heat load served by the heat pump
     hp_kwh: float              # kWh consumed by heat pump
     hp_kw_max: float           # max kW demand of heat pump
     hp_capacity_used_max: float   # Fraction of the heat pump capacity used, maximum, 0 - 1.0
@@ -88,14 +89,19 @@ class HeatTimePeriodResults(BaseModel):
     secondary_fuel_units: float   # fuel consumed by the secondary system in units of fuel, e,g, 'gallon'
     secondary_kwh: float          # electricity consumed by secondary system, usually for auxiliaries, but also includes electric heat kWh
     secondary_kw_max: float       # max electricity used by secondary system in kW
-    total_kwh: float              # total electricity kWh used by heat pump and secondary system
-    total_kw_max: float           # maximum kW coincident demand by heat pump and secondary heating system
+    space_heat_kwh: float              # total electricity kWh used by heat pump and secondary system
+    space_heat_kw_max: float           # maximum kW coincident demand by heat pump and secondary heating system
+    fuel_units: float | None = None    # total fuel use of the secondary space heating fuel, not just space heat
+    fuel_dol: float | None = None      # fuel cost for the secondary space heating fuel, all end uses of the fuel
+    all_kwh: float | None = None       # electricity including all end uses
+    all_kw_max: float | None = None    # electricity peak demand, all end uses
+    all_elec_dol: float | None = None  # electricty cost, all end uses
 
 
 class HeatModelResults(BaseModel):
     """Space Heat Model results"""
-    monthly_results: List[HeatTimePeriodResults]   # monthly totals of key modeling results
-    annual_results: HeatTimePeriodResults   # Annual totals of key modeling results
+    monthly_results: List[TimePeriodResults]   # monthly totals of key modeling results
+    annual_results: TimePeriodResults   # Annual totals of key modeling results
     design_heat_temp: float                 # 99% design heating temperature, deg F
     design_heat_load: float                 # 99% design heating load, BTU/hour
 
@@ -180,16 +186,11 @@ class HeatPumpAnalysisResults(BaseModel):
     """Results from the analysis of installing a heat pump.
     """
     ua_true_up: float
-    design_heat_load: float
-    design_heat_temp: float
-    annual_cop: float
-    hp_max_out_5F: float
-    max_hp_reached: bool
     co2_lbs_saved: float
     co2_driving_miles_saved: float
-    hp_load_frac: float
     econ: CashFlowAnalysis
-
+    base_case_detail: HeatModelResults
+    with_heat_pump_detail: HeatModelResults
 
 # ------- SAMPLE DATA -------
 
