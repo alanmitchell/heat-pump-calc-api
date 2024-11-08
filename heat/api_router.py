@@ -3,12 +3,12 @@ from fastapi import APIRouter
 
 from . import home_heat_model as heat
 from . import heat_pump_analysis as analyze
-from .models import HeatModelInputs, HeatModelResults, HeatPumpAnalysisInputs, HeatPumpAnalysisResults
+from .models import HeatModelInputs, DetailedModelResults, HeatPumpAnalysisInputs, HeatPumpAnalysisResults
 
 router = APIRouter()
 
-@router.post("/heat/model-space-heat", response_model=HeatModelResults, tags=['Heating Models'])
-async def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
+@router.post("/heat/model-space-heat", response_model=DetailedModelResults, tags=['Heating Models'])
+async def model_space_heat(inp: HeatModelInputs) -> DetailedModelResults:
     return heat.model_space_heat(inp)
 
 @router.post("/heat/analyze-heat-pump", response_model=HeatPumpAnalysisResults, tags=['Heating Models'])

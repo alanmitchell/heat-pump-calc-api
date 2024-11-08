@@ -91,15 +91,18 @@ class TimePeriodResults(BaseModel):
     secondary_kw_max: float       # max electricity used by secondary system in kW
     space_heat_kwh: float              # total electricity kWh used by heat pump and secondary system
     space_heat_kw_max: float           # maximum kW coincident demand by heat pump and secondary heating system
-    fuel_units: float | None = None    # total fuel use of the secondary space heating fuel, not just space heat
-    fuel_dol: float | None = None      # fuel cost for the secondary space heating fuel, all end uses of the fuel
+
+    # total fuel use of the secondary space heating fuel type, not just space heat
+    fuel_units: float | None = None
+    fuel_dol: float | None = None      # fuel cost for the secondary space heating fuel type, all end uses of the fuel
     all_kwh: float | None = None       # electricity including all end uses
     all_kw_max: float | None = None    # electricity peak demand, all end uses
     all_elec_dol: float | None = None  # electricty cost, all end uses
+    total_dol: float | None = None     # total costs, electricity + fuel
 
 
-class HeatModelResults(BaseModel):
-    """Space Heat Model results"""
+class DetailedModelResults(BaseModel):
+    """Model results with monthly and annual aggregate detail."""
     monthly_results: List[TimePeriodResults]   # monthly totals of key modeling results
     annual_results: TimePeriodResults   # Annual totals of key modeling results
     design_heat_temp: float                 # 99% design heating temperature, deg F
@@ -189,8 +192,9 @@ class HeatPumpAnalysisResults(BaseModel):
     co2_lbs_saved: float
     co2_driving_miles_saved: float
     econ: CashFlowAnalysis
-    base_case_detail: HeatModelResults
-    with_heat_pump_detail: HeatModelResults
+    base_case_detail: DetailedModelResults
+    with_heat_pump_detail: DetailedModelResults
+    annual_change_detail: TimePeriodResults
 
 # ------- SAMPLE DATA -------
 

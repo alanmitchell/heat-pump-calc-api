@@ -9,7 +9,7 @@ import pandas as pd
 from .models import (
     HeatModelInputs,
     TimePeriodResults,
-    HeatModelResults, 
+    DetailedModelResults, 
     WallInsulLevel, 
     TemperatureTolerance,
 )
@@ -116,7 +116,7 @@ def design_heat_load(self) -> Tuple[float, float]:
 
 # ---------------- Main Calculation Method --------------------
 
-def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
+def model_space_heat(inp: HeatModelInputs) -> DetailedModelResults:
     """Main calculation routine that models the home and determines
     loads and fuel use by hour.  Also calculates summary results.
     """
@@ -339,25 +339,13 @@ def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
     dfm['secondary_fuel_units'] = dfm['secondary_fuel_mmbtu'] * 1e6 / fuel.btus
 
     # COP by month
-    dfm['cop'] = dfm.hp_load_mmbtu / (dfm.hp_kwh * 0.003412)   
-
-    # calculate annual totals. this is a Pandas Series
-    tot = dfm.sum()
+    dfm['cop'] = dfm.hp_load_mmbtu / (dfm.hp_kwh * 0.003412)
 
     # Add in a column to report the period being summarized
     dfm['period'] = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    tot['period'] = 'Annual'
 
-    # Fix the seasonal COP, the heat pump load fraction, and the maximum values
-    if tot.hp_kwh:
-        tot['cop'] =  tot.hp_load_mmbtu * 1e6 / tot.hp_kwh / 3412.
-    else:
-        tot['cop'] = np.nan
-    tot['hp_load_frac'] = tot.hp_load_mmbtu / (tot.hp_load_mmbtu + tot.secondary_load_mmbtu)
-    tot['hp_capacity_used_max'] = dfm['hp_capacity_used_max'].max()
-    tot['hp_kw_max'] = dfm['hp_kw_max'].max()    
-    tot['secondary_kw_max'] = dfm['secondary_kw_max'].max()
-    tot['space_heat_kw_max'] = dfm['space_heat_kw_max'].max()
+    # Aggregate monthly results into annual results
+    tot = monthly_to_annual_results(dfm)
 
     # Include monthly and annual results
     res['monthly_results'] = dataframe_to_models(dfm, TimePeriodResults, True)
@@ -369,9 +357,7 @@ def model_space_heat(inp: HeatModelInputs) -> HeatModelResults:
     res['design_heat_load'] = ua_home * (inp.indoor_heat_setpoint - design_t) + \
         ua_garage * (GARAGE_HEATING_SETPT - design_t)
 
-    # dfh.to_excel('/home/alan/Downloads/dfh.xlsx')
-
-    return HeatModelResults(**res)
+    return DetailedModelResults(**res)
 
 def determine_ua_true_up(heat_model_inputs: HeatModelInputs, secondary_fuel_use_actual: float) -> float:
     """Returns a UA true up multiplier that causes the space heat model to match the actual space
@@ -412,3 +398,37 @@ def determine_ua_true_up(heat_model_inputs: HeatModelInputs, secondary_fuel_use_
         ua_true_up = 1.0 + (secondary_fuel_use_actual - fuel_use1) / slope
 
     return ua_true_up
+
+def monthly_to_annual_results(df_monthly: pd.DataFrame) -> pd.Series:
+    """Aggregrates a monthly model results DataFrame (with columns that are all
+    or a subset of TimePeriodResults) into an Annual Pandas series.
+    """
+    # identify the numeric columns, which are the ones that can be aggregated into
+    # annual values.
+    numeric_cols = df_monthly.select_dtypes(include='number').columns
+
+    # the most common aggregation is summing so do that to all the columns and
+    # then fix the ones that shouldn't be summed.
+    annual = df_monthly[numeric_cols].sum()
+
+    # loop through the columns, fixing as needed
+    for col in numeric_cols:
+
+        if col in ('hp_kw_max', 'secondary_kw_max', 'space_heat_kw_max', 'all_kw_max', 'hp_capacity_used_max'):
+            annual[col] = df_monthly[col].max()
+
+        elif col == 'hp_load_frac':
+            annual['hp_load_frac'] = annual.hp_load_mmbtu / (annual.hp_load_mmbtu + annual.secondary_load_mmbtu)
+
+    # the 'cop' column may not be included in the numeric_cols list due to NaN, but it should be inlcuded
+    if annual.hp_kwh > 0.0:
+        annual['cop'] = annual.hp_load_mmbtu / (annual.hp_kwh * 0.003412)
+    else:
+        annual['cop'] = np.nan
+
+
+    # add the period column back in
+    annual['period'] = 'Annual'
+
+    return annual
+        
