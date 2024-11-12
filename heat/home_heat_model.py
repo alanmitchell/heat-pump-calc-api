@@ -403,9 +403,9 @@ def monthly_to_annual_results(df_monthly: pd.DataFrame) -> pd.Series:
     """Aggregrates a monthly model results DataFrame (with columns that are all
     or a subset of TimePeriodResults) into an Annual Pandas series.
     """
-    # identify the numeric columns, which are the ones that can be aggregated into
-    # annual values.
-    numeric_cols = df_monthly.select_dtypes(include='number').columns
+    # Get a list of numeric columms by removing the 'period' column.
+    numeric_cols = list(df_monthly.columns)
+    numeric_cols.remove('period')
 
     # the most common aggregation is summing so do that to all the columns and
     # then fix the ones that shouldn't be summed.

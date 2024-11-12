@@ -9,7 +9,8 @@ from .models import (
     HeatPumpAnalysisInputs, 
     HeatPumpAnalysisResults, 
     TimePeriodResults,
-    DetailedModelResults
+    DetailedModelResults,
+    MiscHeatPumpResults
 )
 from .home_heat_model import model_space_heat, ELECTRIC_ID, determine_ua_true_up, monthly_to_annual_results
 import econ.econ
@@ -46,8 +47,11 @@ def convert_co2_to_miles_driven(co2_saved: float) -> float:
 def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
     """Performs a performance and economic analysis of installing a Heat Pump.
     """
-    # Start results dictionary
+    # Start the main results dictionary
     res = {}
+
+    # Start the miscellaneous results dictionary
+    misc_res = {}
 
     # shortcuts to some of the input structures
     inp_bldg = inp.bldg_model_inputs
@@ -124,9 +128,9 @@ def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
     else:
         ua_true_up = 1.0
         
-    # Set the UA true up value into the model and also add it to results.
+    # Set the UA true up value into the model and also add it to the miscellaneous results.
     inp_bldg.ua_true_up = ua_true_up
-    res['ua_true_up'] = ua_true_up
+    misc_res['ua_true_up'] = ua_true_up
 
     # Run the base case with no heat pump and record energy results.
     # This model only models the space heating end use.
@@ -144,8 +148,8 @@ def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
     # CO2 savings. If secondary fuel is electric, fuel.co2 is None, so protect against that.
     co2_base = en_base.annual_results.space_heat_kwh * elec_util.CO2 + en_base.annual_results.secondary_fuel_mmbtu * chg_nonnum(fuel.co2, 0.0)
     co2_hp = en_hp.annual_results.space_heat_kwh * elec_util.CO2 + en_hp.annual_results.secondary_fuel_mmbtu * chg_nonnum(fuel.co2, 0.0)
-    res['co2_lbs_saved'] = co2_base - co2_hp
-    res['co2_driving_miles_saved'] = convert_co2_to_miles_driven(res['co2_lbs_saved'])
+    misc_res['co2_lbs_saved'] = co2_base - co2_hp
+    misc_res['co2_driving_miles_saved'] = convert_co2_to_miles_driven(misc_res['co2_lbs_saved'])
 
     # -------- Monthly cash flow analysis - Determine Base Electric Use
 
@@ -298,7 +302,11 @@ def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
     ann_hp = monthly_to_annual_results(dfh)
 
     # determine the change from the base case to the heat pump case
-    numeric_cols = dfh.select_dtypes(include='number').columns
+    # Get a list of numeric columms by removing the 'period' column.
+    numeric_cols = list(dfh.columns)
+    numeric_cols.remove('period')
+    df_mo_chg = dfh[numeric_cols] - dfb[numeric_cols]
+    df_mo_chg['period'] = dfh['period'].values
     ann_chg = ann_hp[numeric_cols] - ann_base[numeric_cols]
     ann_chg['period'] = ann_base['period']
 
@@ -319,7 +327,23 @@ def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
         design_heat_temp = design_t,
         design_heat_load = design_load
     )
-    res['annual_change_detail'] = nan_to_none(ann_chg.to_dict())
+    res['change_detail'] = DetailedModelResults(
+        monthly_results = dataframe_to_models(df_mo_chg, TimePeriodResults, True),
+        annual_results = nan_to_none(ann_chg.to_dict()),
+        design_heat_temp = 0.0,           # no change in design heat temperature or load
+        design_heat_load = 0.0
+    )
+
+    # Calculate and include incremental fuel and electricity prices
+    if ann_chg.fuel_units != 0.0:
+        misc_res['fuel_price_incremental'] = ann_chg.fuel_dol / ann_chg.fuel_units
+    else:
+        misc_res['fuel_price_incremental'] = None
+
+    if ann_chg.all_kwh != 0.0:
+        misc_res['elec_rate_incremental'] = ann_chg.all_elec_dol / ann_chg.all_kwh
+    else:
+        misc_res['elec_rate_incremental'] = None
 
     # ---------------- Cash Flow Analysis
 
@@ -395,6 +419,9 @@ def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
         discount_rate=inp_econ.discount_rate,
         cash_flow_items=cash_flow_items
     )
-    res['econ'] = econ.econ.analyze_cash_flow(econ_inp)
+    res['financial'] = econ.econ.analyze_cash_flow(econ_inp)
+
+    # add in the miscellaneous results
+    res['misc'] = MiscHeatPumpResults(**misc_res)
 
     return HeatPumpAnalysisResults(**res)

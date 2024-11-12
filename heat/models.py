@@ -185,16 +185,32 @@ class HeatPumpAnalysisInputs(BaseModel):
     actual_fuel_use: ActualFuelUse       # Information about the actual fuel and electricity use of the home
                                          #    prior to installing the heat pump.
 
+class MiscHeatPumpResults(BaseModel):
+    # the multiplicative factor applied to building UA value in order to match the actual fuel
+    # consumption of the building
+    ua_true_up: float
+
+    # reduced pounds per year of CO2 emissions due to heat pump use
+    co2_lbs_saved: float
+
+    # the annual driving mile equivalent of the above CO2 reduction
+    co2_driving_miles_saved: float
+
+    # the incremental price of the heating fuel being avoided, including sales tax
+    fuel_price_incremental: float
+
+    # the incremental price of the electricity used by the heat pump
+    elec_rate_incremental: float
+
+
 class HeatPumpAnalysisResults(BaseModel):
     """Results from the analysis of installing a heat pump.
     """
-    ua_true_up: float
-    co2_lbs_saved: float
-    co2_driving_miles_saved: float
-    econ: CashFlowAnalysis
-    base_case_detail: DetailedModelResults
-    with_heat_pump_detail: DetailedModelResults
-    annual_change_detail: TimePeriodResults
+    misc: MiscHeatPumpResults                 # miscellaneous results
+    financial: CashFlowAnalysis               # cash flow and financial results for heat pump install
+    base_case_detail: DetailedModelResults    # monthly and annual detail on the "no heat pump" case
+    with_heat_pump_detail: DetailedModelResults   # monthly and annual detail on the "with heat pump" case
+    change_detail: DetailedModelResults       # the changes that occur going from the "no" to "with heat pump" case
 
 # ------- SAMPLE DATA -------
 
