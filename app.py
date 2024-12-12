@@ -1,5 +1,8 @@
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from starlette.staticfiles import StaticFiles
+from starlette.templating import Jinja2Templates
+from starlette.requests import Request
 
 import library.api_router
 import heat.api_router
@@ -42,16 +45,24 @@ app = FastAPI(
     openapi_tags=tags_metadata
 )
 
+# configure static files for the app
+app.mount('/static', StaticFiles(directory='static'), name='static')
+
+templates = Jinja2Templates('templates')
+
 @app.get("/", include_in_schema=False)
-async def root():
-    return {"message": "Hello from the Alaska Heat Pump Calculator API!"}
+async def index(request: Request):
+    return templates.TemplateResponse(
+        request=request, name='index.html', context={})
+
+# Define a route for the favicon
+#@app.get("/favicon.ico", include_in_schema=False)
+#async def favicon():
+#    return FileResponse("/static/img/heat-pump.png")
 
 @app.get("/version", response_model=Version, tags=['General'])
 async def version() -> Version:
     return Version(version=VERSION, version_date=VERSION_DATE)
-
-# configure static files for the app
-app.mount('/static', StaticFiles(directory='static'), name='static')
 
 # routes that related to the Energy Library database supporting the app, including
 # city, utility, weather, and fuel information.

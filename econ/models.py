@@ -114,7 +114,8 @@ class CashFlowAnalysis(BaseModel):
     
     # A cash flow table in dictionary form. Keys are column headings and values are
     # a list of the cash flows for each year starting with Year 0. The table also
-    # includes a "Year" key, which lists the years starting with 0.
+    # includes a "Year" key, which lists the years starting with 0. Positive values
+    # are benefits and negative values are costs.
     cash_flow_table: Dict[str, List[float | int]]
 
     # Internal rate of return of the cash flow. None if it can't be calculated.
