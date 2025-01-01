@@ -1,8 +1,15 @@
+# This now can be run from the 'bin' directory since it inserts the parent
+# directory in the path.
+
+# Old method of running:
 # from the root project directory, run this script via the following command:
 #
 #     python -m bin.test_library
 #
 # This is needed for test_library to find the modules it needs to import.
+import sys
+sys.path.insert(0, '../')
+
 from library.library import (
     cities, 
     city_from_id, 
