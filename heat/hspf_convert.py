@@ -11,14 +11,17 @@ import numpy as np
 from .models import HSPFtype
 
 # piecewise linear curves to do to conversion
+# The first four points for each conversion come from the above
+# referenced notebook. The last point (highest HSPF) is extrapolated
+# using the slope from developed from the 2nd and 4th points
 
 # To convert from HSPF2 Region 4
-from_hspf2reg4_x = np.array([7.75, 8.25, 12.5, 14.0])
-from_hspf2reg4_y = np.array([9.36, 9.55, 13.1, 14.5])
+from_hspf2reg4_x = np.array([7.75, 8.25, 12.5, 14.0, 16.0])
+from_hspf2reg4_y = np.array([9.36, 9.55, 13.1, 14.5, 14.5 + 0.861 * 2.0])
 
 # To convert from HSPF2 Region 5
-from_hspf2reg5_x = np.array([6.25, 7.25, 10.5, 11.25])
-from_hspf2reg5_y = np.array([9.62, 10.1, 13.2, 13.6])
+from_hspf2reg5_x = np.array([6.25, 7.25, 10.5, 11.25, 15.0])
+from_hspf2reg5_y = np.array([9.62, 10.1, 13.2, 13.6, 13.6 + 0.875 * 3.75])
 
 # Note that np.interp extends the endpoint y values for x values that are
 # outside the range of x-values in array.
