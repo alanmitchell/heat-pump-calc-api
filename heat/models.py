@@ -197,7 +197,7 @@ class MiscHeatPumpResults(BaseModel):
     co2_driving_miles_saved: float
 
     # the incremental price of the heating fuel being avoided, including sales tax
-    fuel_price_incremental: float
+    fuel_price_incremental: float | None
 
     # the incremental price of the electricity used by the heat pump
     elec_rate_incremental: float
