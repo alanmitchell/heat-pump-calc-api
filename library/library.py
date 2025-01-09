@@ -12,6 +12,7 @@ import functools
 import urllib
 import time
 from typing import List
+import threading
 
 import pandas as pd
 import requests
@@ -28,19 +29,13 @@ from library.models import (
 )
 
 # Most of the data files are located remotely and are retrieved via
-# an HTTP request.  The function below is used to retrieve the files,
-# which are Pandas DataFrames
-
+# an HTTP request.
 # The base URL to the site where the remote files are located
 base_url = 'https://github.com/alanmitchell/akwlib-export/raw/main/data/v01/'
 
 # This constant controls how frequently the library goes back to the GitHub server to
-# download the freshest AkWarm data.  This timeout is only checked when the heat_pump_from_id()
-# function below is called.
-LIB_TIMEOUT = 12     # units are Hours
-
-# this variable tracks the last time the Akwarm data was refreshed
-last_lib_download_ts = 0.0        # Unix timestamp
+# download the freshest AkWarm data.
+LIB_TIMEOUT = 12.0     # units are Hours
 
 def get_df(file_path):
     """Returns a Pandas DataFrame that is found at the 'file_path'
@@ -157,7 +152,6 @@ def refresh_data():
     global last_lib_download_ts        # tracks time of last refresh
 
     print('acquiring library data...')
-    last_lib_download_ts = time.time()
 
     # Key datasets are read in here and are available as module-level
     # variables for use in the functions above.
@@ -191,6 +185,13 @@ def refresh_data():
     # right now.)
     df_fuel['effic_choices'] = df_fuel.effic_choices.apply(eval)
 
+def periodically_refresh_data():
+    """Function to periodically refresh the library data
+    """
+    while True:
+        refresh_data()
+        time.sleep(LIB_TIMEOUT * 3600.0)
+
 # -----------------------------------------------
 
 # These are the module-level variables that hold the key datasets.
@@ -203,5 +204,7 @@ df_city = None
 df_util = None
 df_fuel = None
 
-# fill out the data variables
-refresh_data()
+# start a thread to refresh data periodically
+thread = threading.Thread(target=periodically_refresh_data)
+thread.daemon = True  # Daemon thread will exit when the main program exits
+thread.start()
