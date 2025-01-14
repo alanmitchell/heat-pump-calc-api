@@ -1,5 +1,5 @@
-"""Utility functions.
-"""
+"""Utility functions."""
+
 import math
 import numbers
 import simplejson
@@ -8,8 +8,9 @@ from typing import List
 import pandas as pd
 from pydantic import BaseModel
 
+
 def chg_nonnum(val, sub_val):
-    """Changes a nan or anything that is not a number to 'sub_val'.  
+    """Changes a nan or anything that is not a number to 'sub_val'.
     Otherwise returns val.
     """
     if isinstance(val, numbers.Number):
@@ -20,6 +21,7 @@ def chg_nonnum(val, sub_val):
     else:
         return sub_val
 
+
 def to_float(val, sub_val):
     """Try to convert 'val' to a float.  If it fails, return 'sub_val' instead.
     Remove any commas before trying to convert.
@@ -27,11 +29,12 @@ def to_float(val, sub_val):
     try:
         if isinstance(val, str):
             # remove any commas before converting.
-            val = val.replace(',', '')
+            val = val.replace(",", "")
         return float(val)
     except:
         return sub_val
-        
+
+
 def is_null(val):
     """Returns True if 'val' is None, NaN, or a blank string.
     Returns False otherwise.
@@ -42,10 +45,11 @@ def is_null(val):
     if isinstance(val, float) and math.isnan(val):
         return True
 
-    if isinstance(val, str) and len(val.strip())==0:
+    if isinstance(val, str) and len(val.strip()) == 0:
         return True
 
     return False
+
 
 def nan_to_none(obj):
     """Converts the NaN values found in an object 'obj' into None values. Only
@@ -53,16 +57,21 @@ def nan_to_none(obj):
     """
     return simplejson.loads(simplejson.dumps(obj, ignore_nan=True))
 
+
 def models_to_dataframe(model_list: List[BaseModel]) -> pd.DataFrame:
-    """Converts a list of Pydantic model objects into a Pandas Dataframe.
-    """
+    """Converts a list of Pydantic model objects into a Pandas Dataframe."""
     dict_list = [o.model_dump() for o in model_list]
     return pd.DataFrame(dict_list)
 
-def dataframe_to_models(df: pd.DataFrame, model: BaseModel, convert_nans: bool = False) -> List[BaseModel]:
+
+def dataframe_to_models(
+    df: pd.DataFrame, model: BaseModel, convert_nans: bool = False
+) -> List[BaseModel]:
     """Converts a Pandas DataFrame into a List of Pydantic model objects.
     Optionally convert NaN values in the DataFrame to None values in the Pydantic
     objects.
     """
-    return [model(**(rec if not convert_nans else nan_to_none(rec))) for rec in df.to_dict(orient='records')]
-
+    return [
+        model(**(rec if not convert_nans else nan_to_none(rec)))
+        for rec in df.to_dict(orient="records")
+    ]
