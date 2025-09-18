@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 from starlette.requests import Request
@@ -43,6 +44,15 @@ app = FastAPI(
     description=description,
     version = VERSION,
     openapi_tags=tags_metadata
+)
+
+# make API very open and not subject to CORS restrictions.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],       # <-- allow all origins
+    allow_credentials=False,   # must be False when using "*"
+    allow_methods=["*"],       # allow all HTTP methods
+    allow_headers=["*"],       # allow all request headers
 )
 
 # configure static files for the app
