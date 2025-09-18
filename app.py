@@ -10,8 +10,8 @@ import heat.api_router
 import econ.api_router
 from general.models import Version
 
-VERSION = '0.1'
-VERSION_DATE = '2024-10-11'
+VERSION = "0.1"
+VERSION_DATE = "2024-10-11"
 
 description = """
 The Alaska Heat Pump Calculator API allows for modeling of heat pump performance
@@ -29,21 +29,15 @@ tags_metadata = [
         "name": "Library",
         "description": "Alaskan Community and Fuel information.",
     },
-    {
-        "name": "Heating Models",
-        "description": "Space Heating and Heat Pump Models."
-    },
-    {
-        "name": "Economic Analysis",
-        "description": "Economic Analysis Functions"
-    }
+    {"name": "Heating Models", "description": "Space Heating and Heat Pump Models."},
+    {"name": "Economic Analysis", "description": "Economic Analysis Functions"},
 ]
 
 app = FastAPI(
     title="Alaska Heat Pump Calculator API",
     description=description,
-    version = VERSION,
-    openapi_tags=tags_metadata
+    version=VERSION,
+    openapi_tags=tags_metadata,
 )
 
 # make API very open and not subject to CORS restrictions.
@@ -56,23 +50,26 @@ app.add_middleware(
 )
 
 # configure static files for the app
-app.mount('/static', StaticFiles(directory='static'), name='static')
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
-templates = Jinja2Templates('templates')
+templates = Jinja2Templates("templates")
+
 
 @app.get("/", include_in_schema=False)
 async def index(request: Request):
-    return templates.TemplateResponse(
-        request=request, name='index.html', context={})
+    return templates.TemplateResponse(request=request, name="index.html", context={})
+
 
 # Define a route for the favicon
-#@app.get("/favicon.ico", include_in_schema=False)
-#async def favicon():
+# @app.get("/favicon.ico", include_in_schema=False)
+# async def favicon():
 #    return FileResponse("/static/img/heat-pump.png")
 
-@app.get("/version", response_model=Version, tags=['General'])
+
+@app.get("/version", response_model=Version, tags=["General"])
 async def version() -> Version:
     return Version(version=VERSION, version_date=VERSION_DATE)
+
 
 # routes that related to the Energy Library database supporting the app, including
 # city, utility, weather, and fuel information.

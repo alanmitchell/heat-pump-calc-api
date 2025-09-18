@@ -1,8 +1,8 @@
 """Used to convert newer HSPF2 values into old HSP values.
 
-The work supporting these conversions is at 
+The work supporting these conversions is at
 /home/alan/gdrive/Heat_Pump/neep-data/neep-for-hp-calculator.ipynb.
-That notebook analyzed an October 2023 NEEP Heat Pump database, which 
+That notebook analyzed an October 2023 NEEP Heat Pump database, which
 contained thousands of heat pump units with HSPF and HSPF2 ratings.
 """
 
@@ -26,6 +26,7 @@ from_hspf2reg5_y = np.array([9.62, 10.1, 13.2, 13.6, 13.6 + 0.875 * 3.75])
 # Note that np.interp extends the endpoint y values for x values that are
 # outside the range of x-values in array.
 
+
 def convert_to_hspf(hspf_value: float, hspf_type: HSPFtype) -> float:
     """Converts an HSPF value of type indicated by 'hspf_type' into the
     an old-version HSPF (Region IV) value"""
@@ -33,9 +34,9 @@ def convert_to_hspf(hspf_value: float, hspf_type: HSPFtype) -> float:
     if hspf_type == HSPFtype.hspf:
         # it is already the old-version HSPF
         return hspf_value
-    
+
     elif hspf_type == HSPFtype.hspf2_reg4:
         return np.interp(hspf_value, from_hspf2reg4_x, from_hspf2reg4_y)
-    
+
     elif hspf_type == HSPFtype.hspf2_reg5:
         return np.interp(hspf_value, from_hspf2reg5_x, from_hspf2reg5_y)
