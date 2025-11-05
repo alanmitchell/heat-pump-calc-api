@@ -99,18 +99,18 @@ def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
     # for the fuel type, e.g. gallons of oil.
     # See Evernote notes on values (AkWarm for DHW and Michael Bluejay for Drying
     # and Cooking).
-    is_electric_heat = fuel.id == ELECTRIC_ID  # True if Electric
+    is_electric_heat = (fuel.id == ELECTRIC_ID)  # True if Electric
     fuel_other_uses = (
-        inp_bldg.exist_heat_system.serves_dhw * 4.23e6 / fuel.dhw_effic
+        (fuel.id == inp_bldg.dhw_fuel_id) * 4.23e6 / fuel.dhw_effic
     )  # per occupant value
-    fuel_other_uses += inp_bldg.exist_heat_system.serves_clothes_drying * (
+    fuel_other_uses += (fuel.id == inp_bldg.clothes_drying_fuel_id) * (
         0.86e6 if is_electric_heat else 2.15e6
     )
-    fuel_other_uses += inp_bldg.exist_heat_system.serves_cooking * (
+    fuel_other_uses += (fuel.id == inp_bldg.cooking_fuel_id) * (
         0.64e6 if is_electric_heat else 0.8e6
     )
     # convert from per occupant to total
-    fuel_other_uses *= inp_bldg.exist_heat_system.occupant_count
+    fuel_other_uses *= inp_bldg.occupant_count
     # convert to fuel units
     fuel_other_uses /= fuel.btus
 

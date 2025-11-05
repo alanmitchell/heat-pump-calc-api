@@ -71,15 +71,6 @@ class ConventionalHeatingSystem(BaseModel):
     )
     heating_effic: float  # 0 - 1.0 seasonal heating efficiency
     aux_elec_use: float  # Auxiliary fan/pump/controls electric use, expressed as kWh/(MMBTU heat delivered)
-    serves_dhw: bool = True  # True if this fuel type heats Domestic Hot Water as well
-    serves_clothes_drying: bool = (
-        False  # True if this fuel type is used for clothes drying
-    )
-    serves_cooking: bool = False  # True if this fuel type is used for cooking
-    occupant_count: float = (
-        3.0  # Number of occupants for purposes of estimating non-space-heat
-    )
-    #     end uses consumption.
 
 
 class HeatModelInputs(BaseModel):
@@ -98,10 +89,15 @@ class HeatModelInputs(BaseModel):
     bldg_floor_area: (
         float  # Floor area in square feet of home living area, not counting garage.
     )
+    occupant_count: float = 3.0    # Number of occupants for estimating non-space energy use
     indoor_heat_setpoint: float = 70.0  # Indoor heating setpoint, deg F
     insul_level: WallInsulLevel = (
         WallInsulLevel.wall2x6
     )  # 1: 2x4, 2: 2x6, 3: better than 2x6 Walls
+
+    dhw_fuel_id: int | None = None       # ID of domestic hot water fuel
+    clothes_drying_fuel_id: int | None = None   # ID of clothes drying fuel
+    cooking_fuel_id: int | None = None   # ID of cooking fuel
 
     # The inputs below are not user inputs, they control the
     # calculation process. They are given default values.
