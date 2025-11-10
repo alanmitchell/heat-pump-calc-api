@@ -9,72 +9,24 @@ import pandas as pd
 
 from .models import (
     HeatModelInputs,
+    HeatPumpSource,
     TimePeriodResults,
     DetailedModelResults,
     WallInsulLevel,
     TemperatureTolerance,
 )
-from .hspf_convert import convert_to_hspf
 from library import library as lib
 from general.utils import nan_to_none, dataframe_to_models
+from heat.heat_pump_performance import air_source_performance, ground_source_performance
 
-# Some General Constants
+# ----------- CONSTANTS
+
 ELECTRIC_ID = 1  # The fuel ID for Electricity
 
-# ------- Data needed for calculation of COP vs. Temperature
-
-# Piecewise linear COP vs. outdoor temperature.  See the notebook at
-# https://github.com/alanmitchell/heat-pump-study/blob/master/general/cop_vs_temp.ipynb
-# for derivation of the original values of this curve.  It was based on averaging a number
-# of field studies of heat pump performance. The values below contain two modifications of that
-# original curve:
-#     1. COPs were reduced by a factor of 0.9 on March 2022 to bring them into better
-#        alignment with measured Seward COPs of 2.66 for HSPF = 15.0 Gree unit, and
-#        COP = 2.62 for HSPF = 13.3 Fujitsu unit (both units owned by Phil Kaluza).
-#     2. The original COP curve dropped off rapidly at low outdoor temperatures.
-#        Cold chamber testing of popular Alaskan mini-splits by Tom Marsik at CCHRC
-#        showed a much less rapid drop off of COP at cold temperatures. The curve below
-#        uses Tom's drop-off slope for temperatures less than 2 deg F.
-#        see '/home/alan/gdrive/Heat_pump/models/low-temp-cop.ipynb for the details of
-#        the new low-temperature figures.
-
-COP_vs_TEMP = (
-    (-20.0, 1.06),
-    (-14.0, 1.21),
-    (-10.0, 1.30),
-    (-6.2, 1.39),
-    (-1.9, 1.49),
-    (2.0, 1.58),
-    (6.0, 1.70),
-    (10.8, 1.84),
-    (14.2, 1.93),
-    (18.1, 2.03),
-    (22.0, 2.13),
-    (25.7, 2.21),
-    (29.9, 2.25),
-    (34.5, 2.44),
-    (38.1, 2.59),
-    (41.8, 2.70),
-    (46.0, 2.79),
-    (50.0, 2.91),
-    (54.0, 2.99),
-    (58.0, 3.09),
-    (61.0, 3.16),
-)
-
-# convert to separate lists of temperatures and COPs
-TEMPS_FIT, COPS_FIT = tuple(zip(*COP_vs_TEMP))
-TEMPS_FIT = np.array(TEMPS_FIT)
-COPS_FIT = np.array(COPS_FIT)
-
-# The HSPF value that this curve is associated with.  This is the average of the HSPFs
-# for the studies used to create the above COP vs. Temperature curve.  See the above
-# referenced Jupyter notebook for more details.
-BASE_HSPF = 11.33
-
-# -------------- OTHER CONSTANTS ---------------
-
 GARAGE_HEATING_SETPT = 55.0  # deg F
+
+# Amount of degrees that ground temperature is above annual average air temperature, deg F
+GROUND_AIR_DELTA_T = 3.0    
 
 
 def temp_depression(ua_per_ft2, balance_point, outdoor_temp, doors_open):
@@ -142,56 +94,46 @@ def model_space_heat(inp: HeatModelInputs) -> DetailedModelResults:
         # Determine days that the heat pump is running.  Look at the 20th percentile
         # temperature for the day, and ensure that it is above the low
         # temperature cutoff.
-        hp_is_running = lambda x: (x.quantile(0.2) > inp.heat_pump.low_temp_cutoff)
-        dfh["running"] = dfh.groupby("day_of_year")["db_temp"].transform(hp_is_running)
+        if inp.heat_pump.low_temp_cutoff is not None:
+            hp_is_running = lambda x: (x.quantile(0.2) > inp.heat_pump.low_temp_cutoff)
+            dfh["running"] = dfh.groupby("day_of_year")["db_temp"].transform(hp_is_running)
+        else:
+            # no cutoff, always running
+            dfh["running"] = True
 
         # Also consider whether the user has selected the month as an Off month.
         if inp.heat_pump.off_months is not None:
             off_mask = dfh.month.isin(inp.heat_pump.off_months)
             dfh.loc[off_mask, "running"] = False
 
-        # Create an adjusted COP curve that accounts for the actual HSPF of
-        # this heat pump. Adjust the COP of this unit by ratioing it to the
-        # average HSPF of the units used to determine the baseline COP vs. Temperature
-        # curve.  Because of the weak correlation of HSPF to actual performance,
-        # the HSPF adjustment here is not linear, but instead dampened by raising
-        # the ratio to the 0.5 power.  This was a judgement call.
-
-        # Convert other HSPF values into old HSPF
-        hspf_old = convert_to_hspf(inp.heat_pump.hspf, inp.heat_pump.hspf_type)
-
-        cops_fit_adj = COPS_FIT * (hspf_old / BASE_HSPF) ** 0.5
-
-        # Also adjust the associated outdoor temperature points to account for the fact
-        # that the indoor temperature setpoint does not equal the 70 degree F
-        # temperature average from the field studies that developed the COP curve.
-        temps_fit_adj = TEMPS_FIT + (inp.indoor_heat_setpoint - 70.0)
+        # Get arrays that map outdoor air temperature to COP and to maximum heating capacity
+        if inp.heat_pump.source_type == HeatPumpSource.air:
+            temps, cops, max_capacities = air_source_performance(
+                inp.heat_pump.hspf,
+                inp.heat_pump.hspf_type,
+                inp.heat_pump.cop_32f,
+                inp.heat_pump.max_out_5f,
+                inp.indoor_heat_setpoint
+            )
+        else:
+            # estimate ground temperature from average annual air temperature and an offset.
+            ground_temp = dfh.db_temp.mean() + GROUND_AIR_DELTA_T
+            temps, cops, max_capacities = ground_source_performance(
+                inp.heat_pump.cop_32f,
+                inp.heat_pump.max_out_32f,
+                inp.indoor_heat_setpoint,
+                ground_temp
+            )
 
         # Note that this same COP curve is used if the garage is heated by the heat pump
         # because heatpump condenser temperature will be set by the home indoor setpoint,
         # even though the garage runs at a cooler temperature
 
-        dfh["cop"] = np.interp(dfh.db_temp, temps_fit_adj, cops_fit_adj)
-
-        # Now determine the maximum output of the heat pump at each temperature point.
-        # Do this by trusting the manufacturer's max output at 5 deg F. Use COP ratios
-        # to adjust from that value.
-        # First get the COP that is associated with the 5 deg F value. This value was
-        # associated with an indoor temperature of 70 deg F, so use the original temperature
-        # curve.
-        cop5F_70F = np.interp(5.0, TEMPS_FIT, cops_fit_adj)
-
-        # Now make a multiplier array that ratios off this COP
-        capacity_mult = cops_fit_adj / cop5F_70F
-
-        # Make an array that is the max output at each of the adjusted temperature
-        # points.
-        max_hp_output_fit_adj = capacity_mult * inp.heat_pump.max_out_5f
+        dfh["cop"] = np.interp(dfh.db_temp, temps, cops)
 
         # Make an hourly array of maximum heat pump output, BTU/hour
-        dfh["max_hp_output"] = np.interp(
-            dfh.db_temp, temps_fit_adj, max_hp_output_fit_adj
-        )
+        dfh["max_hp_output"] = np.interp(dfh.db_temp, temps, max_capacities)
+        breakpoint()
 
     else:
         # No heat pump installed

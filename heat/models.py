@@ -17,6 +17,12 @@ class HSPFtype(str, Enum):
     hspf2_reg4 = "hspf2_reg4"  # HSPF2, Climate Region 4
     hspf = "hspf"  # Original HSPF
 
+class HeatPumpSource(str, Enum):
+    """Source of heat for the heaat pump"""
+
+    air = "air"
+    ground = "ground"
+    water = "water"
 
 class BuildingType(str, Enum):
     """Type of Building. Only relevant for determine the amount
@@ -49,10 +55,13 @@ class TemperatureTolerance(str, Enum):
 class HeatPump(BaseModel):
     """Description of a Heat Pump and Operation Strategy"""
 
-    hspf_type: HSPFtype = HSPFtype.hspf2_reg5  # Type of HSPF specified below
-    hspf: float  # HSPF value of the type determined by hspf_type
-    max_out_5f: float  # maximum heat output at 5 degree F, BTU / hour
-    low_temp_cutoff: float = 5.0  # Temperature deg F below which heat pump is not operated. Evaluated on daily basis, 20% of hours must be below.
+    source_type: HeatPumpSource = HeatPumpSource.air
+    hspf_type: HSPFtype | None = HSPFtype.hspf2_reg5  # Type of HSPF specified below
+    hspf: float | None = None  # HSPF value of the type determined by hspf_type
+    max_out_5f: float | None     # For air-source heat pumps, maximum heat output at 5 degree F, BTU / hour
+    cop_32f: float | None = None # COP @ 32 F, realistic value, not rated value.
+    max_out_32f: float | None = None   # For ground/water-source heatpumps, maximum heat output at 32 deg F EWT (Entering Water Temperature)
+    low_temp_cutoff: float | None = 5.0  # Temperature deg F below which heat pump is not operated. Evaluated on daily basis, 20% of hours must be below.
     off_months: List[int] | None = (
         None  # Tuple of Month Numbers (1 = January) for months where heat pump is shut off entirely.
     )
