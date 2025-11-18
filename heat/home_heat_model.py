@@ -53,20 +53,6 @@ def temp_depression(ua_per_ft2, balance_point, outdoor_temp, doors_open):
     return temp_depress
 
 
-def design_heat_load(self) -> Tuple[float, float]:
-    """Returns the 99% design heat load for the building and the associated
-    design temperature, including the garage if present.  Do not account for
-    any internal or solar gains, as is conventional.
-    Return values are Btu/hour and deg F.
-    """
-    # get the 1% outdoor temperature
-    design_temp = lib.heating_design_temp(self.city.TMYid)
-    design_load = self.ua_home * (
-        self.indoor_heat_setpoint - design_temp
-    ) + self.ua_garage * (GARAGE_HEATING_SETPT - design_temp)
-    return design_load, design_temp
-
-
 # ---------------- Main Calculation Method --------------------
 
 
