@@ -133,7 +133,8 @@ def model_space_heat(inp: HeatModelInputs) -> DetailedModelResults:
 
         # Make an hourly array of maximum heat pump output, BTU/hour
         dfh["max_hp_output"] = np.interp(dfh.db_temp, temps, max_capacities)
-        breakpoint()
+        
+        # breakpoint()
 
     else:
         # No heat pump installed
