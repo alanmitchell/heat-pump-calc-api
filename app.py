@@ -6,12 +6,12 @@ from starlette.templating import Jinja2Templates
 from starlette.requests import Request
 
 import library.api_router
-import heat.api_router
+import energy.api_router
 import econ.api_router
 from general.models import Version
 
-VERSION = "0.1"
-VERSION_DATE = "2024-10-11"
+VERSION = "0.2"
+VERSION_DATE = "2025-11-19"
 
 description = """
 The Alaska Heat Pump Calculator API allows for modeling of heat pump performance
@@ -29,7 +29,7 @@ tags_metadata = [
         "name": "Library",
         "description": "Alaskan Community and Fuel information.",
     },
-    {"name": "Heating Models", "description": "Space Heating and Heat Pump Models."},
+    {"name": "Energy Models", "description": "Energy Use and Heat Pump Models."},
     {"name": "Economic Analysis", "description": "Economic Analysis Functions"},
 ]
 
@@ -76,7 +76,7 @@ async def version() -> Version:
 app.include_router(library.api_router.router)
 
 # routes to heating and heat pump models.
-app.include_router(heat.api_router.router)
+app.include_router(energy.api_router.router)
 
 # routes to economic analysis functions.
 app.include_router(econ.api_router.router)

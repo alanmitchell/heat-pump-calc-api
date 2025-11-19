@@ -1,6 +1,6 @@
 """Models associated with the home energy and heat pump calculations."""
 
-from typing import List, Tuple, Dict
+from typing import List, Tuple
 from enum import Enum
 
 from pydantic import BaseModel
@@ -48,6 +48,19 @@ class TemperatureTolerance(str, Enum):
     med = "med"  # 5 deg F drop is acceptable
     high = "high"  # 10 deg F drop is acceptable
 
+class EndUse(str, Enum):
+    """Energy End Uses addressed by model"""
+    space_htg = "space_htg"    # space heating
+    dhw = "dhw"                # domestic hot water
+    cooking = "cooking"        # cooking
+    drying = "drying"          # drying
+    misc_elec = "misc_elec"    # other electric lights and appliances
+
+class EVCharging(str, Enum):
+    """Type of Home EV Charging"""
+    none = "none"         # None
+    level_1 = "level_1"   # Level 1, 120 V
+    level_2 = "level_2"   # Level 2, 240 V
 
 # --------------- Pydantic Models for Space Heating Models
 
@@ -147,45 +160,40 @@ class BuildingDescription(BaseModel):
     dhw_ef: float                     # Energy Factor of DHW System
     clothes_drying_fuel_id: int | None = None   # ID of clothes drying fuel
     cooking_fuel_id: int | None = None   # ID of cooking fuel
+    ev_charging: EVCharging             # Type of Home EV charging
 
     # *** Need to have miscellaneous lights and appliances info here
 
 
 class TimePeriodResults(BaseModel):
     period: str  # time period being reported on, e.g. "Jan" for January, "Annual" for full year
-    hp_load_mmbtu: float  # heat load in MMBTU served by heat pump
-    hp_load_frac: float  # fraction of the heat load served by the heat pump
+    hp_load_mmbtu: float  # space heat load in MMBTU served by heat pump
+    hp_load_frac: float  # fraction of the space heat load served by the heat pump
     hp_kwh: float  # kWh consumed by heat pump
     hp_kw_max: float  # max kW demand of heat pump
-    hp_capacity_used_max: (
-        float  # Fraction of the heat pump capacity used, maximum, 0 - 1.0
-    )
+    hp_capacity_used_max: float  # Fraction of the heat pump capacity used, maximum, 0 - 1.0
     cop: float | None  # average heat pump COP for the period
-    secondary_load_mmbtu: (
-        float  # heat load in MMBTU served by secondary, conventional, heating system
-    )
-    secondary_fuel_mmbtu: float  # fuel consumed by the secondary system in MMBTU
-    secondary_fuel_units: (
-        float  # fuel consumed by the secondary system in units of fuel, e,g, 'gallon'
-    )
-    secondary_kwh: float  # electricity consumed by secondary system, usually for auxiliaries, but also includes electric heat kWh
-    secondary_kw_max: float  # max electricity used by secondary system in kW
-    space_heat_kwh: (
-        float  # total electricity kWh used by heat pump and secondary system
-    )
-    space_heat_kw_max: (
-        float  # maximum kW coincident demand by heat pump and secondary heating system
+
+    conventional_load_mmbtu: (
+        Tuple[float, float]  # space heat load in MMBTU served by (priimary, secondary) conventional heating systems
     )
 
-    # total fuel use of the secondary space heating fuel type, not just space heat
-    fuel_units: float | None = None
-    fuel_dol: float | None = (
-        None  # fuel cost for the secondary space heating fuel type, all end uses of the fuel
-    )
-    all_kwh: float | None = None  # electricity including all end uses
-    all_kw_max: float | None = None  # electricity peak demand, all end uses
-    all_elec_dol: float | None = None  # electricty cost, all end uses
-    total_dol: float | None = None  # total costs, electricity + fuel
+    # Fuel use in MMBTU by Fuel ID and End Use.
+    # Outer key is Fuel ID (matching AkWarm Fuel IDs), inner key is energy end-use.
+    # Value is fuel use expressed in MMBTU (remember electricity is in MMBTU also)
+    fuel_use_mmbtu: dict[int, dict[EndUse, float]]
+
+    # Electric coincident peak demand in kW
+    elec_demand: float
+
+    # Fuel use expressed in fuel units (e.g. gallons) by Fuel ID and End Use
+    fuel_use_units: dict[int, dict[EndUse, float]]
+
+    # Fuel Cost by Fuel ID
+    fuel_cost: dict[int, float]
+
+    # Total Fuel and Electricity costs
+    fuel_total_cost: float | None = None
 
 
 class DetailedModelResults(BaseModel):
@@ -202,14 +210,14 @@ class DetailedModelResults(BaseModel):
 # Models related to Heat Pump analysis.
 
 
-class HeatPumpCost(BaseModel):
+class RetrofitCost(BaseModel):
     """Cost information about installing, operating, and potentially financing
-    a heat pump.
+    a building retrofit, usually a heat pump retrofit.
     """
 
     capital_cost: float  # Installation cost, $
     rebate_amount: float = 0.0  # Rebate $ available to offset installation cost
-    heat_pump_life: int = 14  # Life of heat pump in years
+    retrofit_life: int = 14  # Life of heat pump in years
     op_cost_chg: float = (
         0.0  # Change in annual heating system operating cost due to use of
     )
@@ -238,15 +246,15 @@ class EconomicInputs(BaseModel):
     # it is considered to be a list of fuel price multipliers for the years spanning the life
     # the of the heat pump. If the list is shorter than the life, the last value is extended for
     # the missing years.
+    # This same escalation pattern is applied to all non-electric fuel prices
     fuel_price_forecast: float | List[float] = 0.033
 
-    discount_rate: float = (
-        0.0537  # Economic discount rate as a fraction for Present Value
-    )
-    #    calculations, nominal rate, 0.06 for 6%/year
-    inflation_rate: float = (
-        0.023  # General inflation rate, expressed as a fraction, 0.02 for 2% / year
-    )
+    # Economic discount rate, nominal, as a fraction for Present Value calculations.
+    # 0.0537 equates to 3% real with a 2.3% inflation rate.
+    discount_rate: float = 0.0537
+
+    # General inflation rate, expressed as a fraction, 0.023 for 2.3% / year
+    inflation_rate: float = 0.023  
 
 
 class ActualFuelUse(BaseModel):
@@ -266,21 +274,19 @@ class ActualFuelUse(BaseModel):
     electric_use_by_month: List[float | None] | None = None
 
 
-class HeatPumpAnalysisInputs(BaseModel):
-    """Describes all the inputs used the analysis of the heat pump"""
+class RetrofitAnalysisInputs(BaseModel):
+    """Describes all the inputs used the analysis of the retrofit"""
 
     bldg_name: str = ""  # Building Name
     notes: str = ""  # Notes about the analysis
-    bldg_model_inputs: HeatModelInputs  # Inputs describing the space heating characteristics of the building
-    heat_pump_cost: HeatPumpCost  # Inputs describing the cost of installing and operating the heat pump
+    pre_bldg: BuildingDescription  # Inputs describing the existing, pre-retrofit building.
+    post_bldg: BuildingDescription  # Inputs describing the post-retrofit building.
+    retrofit_cost: RetrofitCost  # Inputs describing the cost of installing and operating the heat pump
     economic_inputs: (
         EconomicInputs  # Fuel and Electricity price inputs and general economic inputs.
     )
-    actual_fuel_use: ActualFuelUse  # Information about the actual fuel and electricity use of the home
-    #    prior to installing the heat pump.
 
-
-class MiscHeatPumpResults(BaseModel):
+class MiscRetrofitResults(BaseModel):
     # the multiplicative factor applied to building UA value in order to match the actual fuel
     # consumption of the building
     ua_true_up: float
@@ -298,18 +304,18 @@ class MiscHeatPumpResults(BaseModel):
     elec_rate_incremental: float
 
 
-class HeatPumpAnalysisResults(BaseModel):
+class RetrofitAnalysisResults(BaseModel):
     """Results from the analysis of installing a heat pump."""
 
-    misc: MiscHeatPumpResults  # miscellaneous results
+    misc: MiscRetrofitResults  # miscellaneous results
     financial: CashFlowAnalysis  # cash flow and financial results for heat pump install
     base_case_detail: (
-        DetailedModelResults  # monthly and annual detail on the "no heat pump" case
+        DetailedModelResults  # monthly and annual detail on the existing, pre-retrofit case
     )
-    with_heat_pump_detail: (
-        DetailedModelResults  # monthly and annual detail on the "with heat pump" case
+    with_retrofit_detail: (
+        DetailedModelResults  # monthly and annual detail on the post-retrofit case
     )
-    change_detail: DetailedModelResults  # the changes that occur going from the "no" to "with heat pump" case
+    change_detail: DetailedModelResults  # the changes that occur going from the pre- to post-retrofit case
 
 
 # ------- SAMPLE DATA -------

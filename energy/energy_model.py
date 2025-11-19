@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from .models import (
-    HeatModelInputs,
+    BuildingDescription,
     HeatPumpSource,
     TimePeriodResults,
     DetailedModelResults,
@@ -17,7 +17,7 @@ from .models import (
 )
 from library import library as lib
 from general.utils import nan_to_none, dataframe_to_models
-from heat.heat_pump_performance import air_source_performance, ground_source_performance
+from energy.heat_pump_performance import air_source_performance, ground_source_performance
 
 # ----------- CONSTANTS
 
@@ -56,7 +56,7 @@ def temp_depression(ua_per_ft2, balance_point, outdoor_temp, doors_open):
 # ---------------- Main Calculation Method --------------------
 
 
-def model_space_heat(inp: HeatModelInputs) -> DetailedModelResults:
+def model_building(inp: BuildingDescription) -> DetailedModelResults:
     """Main calculation routine that models the home and determines
     loads and fuel use by hour.  Also calculates summary results.
     """
@@ -322,13 +322,13 @@ def model_space_heat(inp: HeatModelInputs) -> DetailedModelResults:
 
 
 def determine_ua_true_up(
-    heat_model_inputs: HeatModelInputs, secondary_fuel_use_actual: float
+    energy_model_inputs: BuildingDescription, secondary_fuel_use_actual: float
 ) -> float:
     """Returns a UA true up multiplier that causes the space heat model to match the actual space
     heating use of the home, which is passed in the 'secondary_fuel_use_actual' variable.
     """
     # make a copy of the inputs to work with
-    inp = heat_model_inputs.model_copy()
+    inp = energy_model_inputs.model_copy()
 
     # set a flag indicating if this uses electric resistance as the existing space heat source
     is_electric = inp.exist_heat_system.heat_fuel_id == ELECTRIC_ID
@@ -338,7 +338,7 @@ def determine_ua_true_up(
     inp.ua_true_up = 1.0
 
     # model space heat use of the building
-    res = model_space_heat(inp)
+    res = model_building(inp)
     # retrieve space heating fuel use expressed in fuel units (e.g. gallon)
     if is_electric:
         fuel_use1 = res.annual_results.secondary_kwh
@@ -348,7 +348,7 @@ def determine_ua_true_up(
     # scale the UA linearly to attempt to match the target fuel use
     ua_true_up = secondary_fuel_use_actual / fuel_use1
     inp.ua_true_up = ua_true_up
-    res = model_space_heat(inp)
+    res = model_building(inp)
 
     if is_electric:
         # For electric heat, electric use for space heat is in secondary_kwh

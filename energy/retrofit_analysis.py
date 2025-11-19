@@ -7,14 +7,14 @@ import numpy as np
 import numpy_financial as npf
 
 from .models import (
-    HeatPumpAnalysisInputs,
-    HeatPumpAnalysisResults,
+    RetrofitAnalysisInputs,
+    RetrofitAnalysisResults,
     TimePeriodResults,
     DetailedModelResults,
-    MiscHeatPumpResults,
+    MiscRetrofitResults,
 )
-from .home_heat_model import (
-    model_space_heat,
+from .energy_model import (
+    model_building,
     ELECTRIC_ID,
     determine_ua_true_up,
     monthly_to_annual_results,
@@ -61,7 +61,7 @@ def convert_co2_to_miles_driven(co2_saved: float) -> float:
     return mileage_equivalent
 
 
-def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
+def analyze_retrofit(inp: RetrofitAnalysisInputs) -> RetrofitAnalysisResults:
     """Performs a performance and economic analysis of installing a Heat Pump."""
     # Start the main results dictionary
     res = {}
@@ -71,7 +71,7 @@ def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
 
     # shortcuts to some of the input structures
     inp_bldg = inp.bldg_model_inputs
-    inp_hpc = inp.heat_pump_cost
+    inp_hpc = inp.retrofit_cost
     inp_econ = inp.economic_inputs
     inp_actual = inp.actual_fuel_use
 
@@ -159,11 +159,11 @@ def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
     # This model only models the space heating end use.
     bldg_no_hp = inp_bldg.model_copy()
     bldg_no_hp.heat_pump = None
-    en_base = model_space_heat(bldg_no_hp)
+    en_base = model_building(bldg_no_hp)
     res["base_case_detail"] = en_base
 
     # Run the model with the heat pump and record energy results
-    en_hp = model_space_heat(inp_bldg)
+    en_hp = model_building(inp_bldg)
     res["with_heat_pump_detail"] = en_hp
 
     # Calculate some summary measures
@@ -478,13 +478,13 @@ def analyze_heat_pump(inp: HeatPumpAnalysisInputs) -> HeatPumpAnalysisResults:
 
     # Analyze the cash flows
     econ_inp = CashFlowInputs(
-        duration=inp_hpc.heat_pump_life,
+        duration=inp_hpc.retrofit_life,
         discount_rate=inp_econ.discount_rate,
         cash_flow_items=cash_flow_items,
     )
     res["financial"] = econ.econ.analyze_cash_flow(econ_inp)
 
     # add in the miscellaneous results
-    res["misc"] = MiscHeatPumpResults(**misc_res)
+    res["misc"] = MiscRetrofitResults(**misc_res)
 
-    return HeatPumpAnalysisResults(**res)
+    return RetrofitAnalysisResults(**res)
