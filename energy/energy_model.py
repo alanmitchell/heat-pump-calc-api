@@ -63,9 +63,8 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
     # Results dictionary
     res = {}
 
-    # ------ create important input objects
+    # ------ Get information about city
     city = lib.city_from_id(inp.city_id)
-    exist_heat_fuel = lib.fuel_from_id(inp.exist_heat_system.heat_fuel_id)
 
     # ------ Make a DataFrame with hourly input information
     # Do as much processing at this level using array operations, as
@@ -119,8 +118,6 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
 
         # Make an hourly array of maximum heat pump output, BTU/hour
         dfh["max_hp_output"] = np.interp(dfh.db_temp, temps, max_capacities)
-        
-        # breakpoint()
 
     else:
         # No heat pump installed
@@ -128,37 +125,21 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
         dfh["cop"] = 1.0  # filler value
         dfh["max_hp_output"] = 0.0
 
-    # adjustment to UA for insulation level.  My estimate, accounting
-    # for better insulation *and* air-tightness as you move up the
-    # insulation scale.
-    insul_to_ua_adj = {
-        WallInsulLevel.wall2x4: 1.25,
-        WallInsulLevel.wall2x6: 1.0,
-        WallInsulLevel.wall2x6plus: 0.75,
-    }
-
-    ua_insul_adj = insul_to_ua_adj[inp.insul_level]  # pick the appropriate one
-
     # The UA values below are Btu/hr/deg-F
-    # This is the UA / ft2 of the ua_insul_adj = 1.0 home
-    # for the main living space.  Assume garage UA is about 10% higher
-    # due to higher air leakage.
-    # Determined this UA/ft2 below by modeling a typical Enstar home
-    # and having the model estimate space heating use of about 1250 CCF.
-    # See 'accessible_UA.ipynb'.
-    ua_per_ft2 = 0.189
-    ua_home = ua_per_ft2 * ua_insul_adj * inp.bldg_floor_area * inp.ua_true_up
+    # Inputs provided UA / ft2 for the main home. We assume garage is 10% higher
+    # due to higher air leakage.    
+    ua_home = inp.ua_per_ft2 * inp.bldg_floor_area
     garage_area = (0, 14 * 22, 22 * 22, 36 * 25, 48 * 28)[inp.garage_stall_count]
-    ua_garage = ua_per_ft2 * 1.1 * ua_insul_adj * garage_area * inp.ua_true_up
+    ua_garage = inp.ua_per_ft2 * 1.1 * garage_area
 
     # Balance Points of main home and garage
-    # Assume a 10 deg F internal/solar heating effect for Level 2 insulation
-    # in the main home and a 5 deg F heating effect in the garage.
-    # Adjust the heating effect accordingly for other levels of insulation.
-    balance_point_home = inp.indoor_heat_setpoint - 10.0 / ua_insul_adj / inp.ua_true_up
+    # Assume a 8 deg F internal/solar heating effect for a UA/ft2 of 0.19
+    # in the main home and a 4 deg F heating effect in the garage.
+    # Adjust the heating effect accordingly for differing UA / ft2.
+    balance_point_home = inp.indoor_heat_setpoint - 8.0 * 0.19 / inp.ua_per_ft2
 
     # fewer internal/solar in garage
-    balance_point_garage = GARAGE_HEATING_SETPT - 5.0 / ua_insul_adj / inp.ua_true_up
+    balance_point_garage = GARAGE_HEATING_SETPT - 4.0 * 0.19 / inp.ua_per_ft2
 
     # BTU loads in the hour for the heat pump and for the secondary system.
     hp_load = []
