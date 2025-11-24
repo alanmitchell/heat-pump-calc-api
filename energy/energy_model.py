@@ -143,7 +143,7 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
 
     # BTU loads in the hour for the heat pump and for the secondary system.
     hp_load = []
-    secondary_load = []
+    conventional_load = []
 
     # More complicated calculations are done in this hourly loop.  If processing
     # time becomes a problem, try to convert the calculations below into array
@@ -160,7 +160,7 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
         total_load = home_load + garage_load
         if not h.running:
             hp_load.append(0.0)
-            secondary_load.append(total_load)
+            conventional_load.append(total_load)
             hp_capacity_used.append(0.0)
         else:
             # Build up the possible heat pump load, and then limit it to
@@ -177,7 +177,7 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
             # first calculate how much cooler those spaces would be without direct
             # heat.
             temp_depress = temp_depression(
-                ua_home / inp.bldg_floor_area,
+                inp.ua_per_ft2,
                 balance_point_home,
                 h.db_temp,
                 inp.heat_pump.doors_open_to_adjacent,
@@ -199,13 +199,13 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
             hp_ld = min(hp_ld, h.max_hp_output)
 
             hp_load.append(hp_ld)
-            secondary_load.append(total_load - hp_ld)
+            conventional_load.append(total_load - hp_ld)
 
             # record the fraction of the heat pump capacity being used.
             hp_capacity_used.append(hp_ld / h.max_hp_output)
 
     dfh["hp_load_mmbtu"] = np.array(hp_load) / 1e6
-    dfh["secondary_load_mmbtu"] = np.array(secondary_load) / 1e6
+    dfh["conventional_load_mmbtu"] = np.array(conventional_load) / 1e6
     dfh["hp_capacity_used"] = hp_capacity_used
 
     # reduce the secondary load to account for the heat produced by
@@ -213,16 +213,16 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
     # convert the auxiliary heat factor for the secondary heating system into an
     # energy ratio of aux electricity energy to heat delivered.
     aux_ratio = inp.exist_heat_system.aux_elec_use * 0.003412
-    dfh["secondary_load_mmbtu"] /= 1.0 + aux_ratio
+    dfh["conventional_load_mmbtu"] /= 1.0 + aux_ratio
 
     # using array operations, calculate kWh use by the heat pump and
     # the Btu use of secondary system.
     dfh["hp_kwh"] = dfh.hp_load_mmbtu / dfh.cop / 0.003412
     dfh["secondary_fuel_mmbtu"] = (
-        dfh.secondary_load_mmbtu / inp.exist_heat_system.heating_effic
+        dfh.conventional_load_mmbtu / inp.exist_heat_system.heating_effic
     )
     dfh["secondary_kwh"] = (
-        dfh.secondary_load_mmbtu * inp.exist_heat_system.aux_elec_use
+        dfh.conventional_load_mmbtu * inp.exist_heat_system.aux_elec_use
     )  # auxiliary electric use
 
     # if this is electric heat as the secondary fuel, move the secondary fuel use into
@@ -239,7 +239,7 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
     # Annual totals is a Pandas Series.
     total_cols = [
         "hp_load_mmbtu",
-        "secondary_load_mmbtu",
+        "conventional_load_mmbtu",
         "hp_kwh",
         "secondary_fuel_mmbtu",
         "secondary_kwh",
@@ -249,7 +249,7 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
 
     # Add a column for the fraction of the total heat load served by the heat pump.
     dfm["hp_load_frac"] = dfm.hp_load_mmbtu / (
-        dfm.hp_load_mmbtu + dfm.secondary_load_mmbtu
+        dfm.hp_load_mmbtu + dfm.conventional_load_mmbtu
     )
 
     # Add a column for the fraction of heat pump capacity used, maximum across hours
@@ -301,50 +301,6 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
 
     return DetailedModelResults(**res)
 
-
-def determine_ua_true_up(
-    energy_model_inputs: BuildingDescription, secondary_fuel_use_actual: float
-) -> float:
-    """Returns a UA true up multiplier that causes the space heat model to match the actual space
-    heating use of the home, which is passed in the 'secondary_fuel_use_actual' variable.
-    """
-    # make a copy of the inputs to work with
-    inp = energy_model_inputs.model_copy()
-
-    # set a flag indicating if this uses electric resistance as the existing space heat source
-    is_electric = inp.exist_heat_system.heat_fuel_id == ELECTRIC_ID
-
-    # remove heat pump and set UA true to 1.0
-    inp.heat_pump = None
-    inp.ua_true_up = 1.0
-
-    # model space heat use of the building
-    res = model_building(inp)
-    # retrieve space heating fuel use expressed in fuel units (e.g. gallon)
-    if is_electric:
-        fuel_use1 = res.annual_results.secondary_kwh
-    else:
-        fuel_use1 = res.annual_results.secondary_fuel_units
-
-    # scale the UA linearly to attempt to match the target fuel use
-    ua_true_up = secondary_fuel_use_actual / fuel_use1
-    inp.ua_true_up = ua_true_up
-    res = model_building(inp)
-
-    if is_electric:
-        # For electric heat, electric use for space heat is in secondary_kwh
-        fuel_use2 = res.annual_results.secondary_kwh
-    else:
-        fuel_use2 = res.annual_results.secondary_fuel_units
-
-    # In case it wasn't linear, inter/extrapolate to the final ua_true_up
-    if ua_true_up != 1.0:
-        slope = (fuel_use2 - fuel_use1) / (ua_true_up - 1.0)
-        ua_true_up = 1.0 + (secondary_fuel_use_actual - fuel_use1) / slope
-
-    return ua_true_up
-
-
 def monthly_to_annual_results(df_monthly: pd.DataFrame) -> pd.Series:
     """Aggregrates a monthly model results DataFrame (with columns that are all
     or a subset of TimePeriodResults) into an Annual Pandas series.
@@ -370,7 +326,7 @@ def monthly_to_annual_results(df_monthly: pd.DataFrame) -> pd.Series:
 
         elif col == "hp_load_frac":
             annual["hp_load_frac"] = annual.hp_load_mmbtu / (
-                annual.hp_load_mmbtu + annual.secondary_load_mmbtu
+                annual.hp_load_mmbtu + annual.conventional_load_mmbtu
             )
 
     # the 'cop' column may not be included in the numeric_cols list due to NaN, but it should be inlcuded
