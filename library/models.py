@@ -85,8 +85,8 @@ class Fuel(BaseModel):
 class FuelPrice(BaseModel):
     """A price for a particular fuel in a particular city."""
 
-    city: str  # ID of city
-    fuel: str  # ID of fuel
+    city: str  # name of city
+    fuel: str  # name of fuel
     price: float | None  # $/unit for this fuel in the specified city
 
 
