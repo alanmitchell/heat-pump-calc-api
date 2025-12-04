@@ -2,9 +2,11 @@
 energy use of the home either with or without the heat pump.
 """
 
-from typing import Tuple
+from typing import Tuple, List
+from math import cos, pi
 
 import numpy as np
+from numpy.typing import NDArray
 import pandas as pd
 
 from .models import (
@@ -26,10 +28,13 @@ ELECTRIC_ID = 1  # The fuel ID for Electricity
 GARAGE_HEATING_SETPT = 55.0  # deg F
 
 # Amount of degrees that ground temperature is above annual average air temperature, deg F
-GROUND_AIR_DELTA_T = 3.0    
+GROUND_AIR_DELTA_T = 3.0
+
+# Days in each month
+DAYS_IN_MONTH = np.array([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
 
 
-def temp_depression(ua_per_ft2, balance_point, outdoor_temp, doors_open):
+def temp_depression(ua_per_ft2: float, balance_point: float, outdoor_temp: float, doors_open: bool) -> float:
     """Function returns the number of degrees F cooler that the bedrooms are
     relative to the main space, assuming no heating system heat is directly
     provided to bedrooms.  Bedrooms are assumed to be adjacent to the main
@@ -52,6 +57,24 @@ def temp_depression(ua_per_ft2, balance_point, outdoor_temp, doors_open):
     temp_depress = temp_delta * r_to_bedroom / (r_to_bedroom + 1.0 / ua_per_ft2)
     return temp_depress
 
+def monthly_lights_apps(avg_kwh: float, frac_variation: float) -> NDArray[np.float64]:
+    """
+    Returns a numpy Array of 12 kWh values, January - December, representing the kWh used
+    in each month for lights and miscellaneous electrical uses, not counting space heat,
+    water heat, cooking and clothes drying. Assumes sinusoidal variation with the June
+    and December being the min/max points on the curve. If 'frac_variation' is positive, June is
+    minimum and December in maximum use; if 'frac_variation' is negative, shape is reversed.
+    
+    :param avg_kwh: annual average daily electrical consumption, kWh / day
+    :param frac_variation: difference between use/day for the higest use month and annual average 
+        use/day, expressed as a fraction of annual average use per day. Could be negative.
+    """
+    use_per_day = np.array([0.0] * 12)
+    for mo in range(1, 13):
+        radians = (mo % 12) / 12 * 2 * pi
+        use_per_day[mo - 1] = avg_kwh + frac_variation * avg_kwh * cos(radians)
+
+    return DAYS_IN_MONTH * use_per_day
 
 # ---------------- Main Calculation Method --------------------
 
@@ -208,32 +231,8 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
     dfh["conventional_load_mmbtu"] = np.array(conventional_load) / 1e6
     dfh["hp_capacity_used"] = hp_capacity_used
 
-    # reduce the secondary load to account for the heat produced by
-    # the auxiliary electricity use.
-    # convert the auxiliary heat factor for the secondary heating system into an
-    # energy ratio of aux electricity energy to heat delivered.
-    aux_ratio = inp.exist_heat_system.aux_elec_use * 0.003412
-    dfh["conventional_load_mmbtu"] /= 1.0 + aux_ratio
-
-    # using array operations, calculate kWh use by the heat pump and
-    # the Btu use of secondary system.
+    # calculate heat pump kWh usage
     dfh["hp_kwh"] = dfh.hp_load_mmbtu / dfh.cop / 0.003412
-    dfh["secondary_fuel_mmbtu"] = (
-        dfh.conventional_load_mmbtu / inp.exist_heat_system.heating_effic
-    )
-    dfh["secondary_kwh"] = (
-        dfh.conventional_load_mmbtu * inp.exist_heat_system.aux_elec_use
-    )  # auxiliary electric use
-
-    # if this is electric heat as the secondary fuel, move the secondary fuel use into
-    # the secondary kWh column and blank out the secondary fuel MMBtu.
-    if inp.exist_heat_system.heat_fuel_id == ELECTRIC_ID:
-        dfh.secondary_kwh += dfh.secondary_fuel_mmbtu * 1e6 / exist_heat_fuel.btus
-        dfh["secondary_fuel_mmbtu"] = 0.0
-
-    # Make a column for total kWh.  Do this at the hourly level because it is
-    # needed to accurately account for coincident peak demand.
-    dfh["space_heat_kwh"] = dfh.hp_kwh + dfh.secondary_kwh
 
     # Store annual and monthly totals.
     # Annual totals is a Pandas Series.
@@ -241,9 +240,6 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
         "hp_load_mmbtu",
         "conventional_load_mmbtu",
         "hp_kwh",
-        "secondary_fuel_mmbtu",
-        "secondary_kwh",
-        "space_heat_kwh",
     ]
     dfm = dfh.groupby("month")[total_cols].sum()
 
@@ -255,19 +251,12 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
     # Add a column for the fraction of heat pump capacity used, maximum across hours
     dfm["hp_capacity_used_max"] = dfh.groupby("month")[["hp_capacity_used"]].max()
 
-    # Add in columns for the peak electrical demand during the month
-    dfm["hp_kw_max"] = dfh.groupby("month")[["hp_kwh"]].max()
-    dfm["secondary_kw_max"] = dfh.groupby("month")[["secondary_kwh"]].max()
-    dfm["space_heat_kw_max"] = dfh.groupby("month")[
-        ["space_heat_kwh"]
-    ].max()  # can't add the above cuz of coincidence
+    # COP by month
+    dfm["cop"] = dfm.hp_load_mmbtu / (dfm.hp_kwh * 0.003412)
 
     # physical units for secondary fuel
     fuel = exist_heat_fuel  # shortcut variable
     dfm["secondary_fuel_units"] = dfm["secondary_fuel_mmbtu"] * 1e6 / fuel.btus
-
-    # COP by month
-    dfm["cop"] = dfm.hp_load_mmbtu / (dfm.hp_kwh * 0.003412)
 
     # Add in a column to report the period being summarized
     dfm["period"] = [

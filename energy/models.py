@@ -48,6 +48,21 @@ class TemperatureTolerance(str, Enum):
     med = "med"  # 5 deg F drop is acceptable
     high = "high"  # 10 deg F drop is acceptable
 
+class Fuel(str, Enum):
+    """Fuel types."""
+
+    elec = "elec"
+    ng = "ng"
+    propane = "propane"
+    oil1 = "oil1"
+    oil2 = "oil2"
+    birch = "birch"
+    spruce = "spruce"
+    pellets = "pellets"
+    coal = "coal"
+    steam = "steam"
+    hot_water = "hot_water"
+
 class EndUse(str, Enum):
     """Energy End Uses addressed by model"""
     space_htg = "space_htg"    # space heating
@@ -170,27 +185,27 @@ class TimePeriodResults(BaseModel):
     hp_load_mmbtu: float  # space heat load in MMBTU served by heat pump
     hp_load_frac: float  # fraction of the space heat load served by the heat pump
     hp_kwh: float  # kWh consumed by heat pump
-    hp_kw_max: float  # max kW demand of heat pump
     hp_capacity_used_max: float  # Fraction of the heat pump capacity used, maximum, 0 - 1.0
     cop: float | None  # average heat pump COP for the period
 
-    conventional_load_mmbtu: (
-        Tuple[float, float]  # space heat load in MMBTU served by (priimary, secondary) conventional heating systems
+    conventional_load_mmbtu: float   # total space heat load in MMBTU served by conventional systems
+    conventional_load_mmbtu_by_sys: (
+        Tuple[float, float]  # space heat load in MMBTU served by conventional heating systems, split (primary, secondary)
     )
 
     # Fuel use in MMBTU by Fuel ID and End Use.
-    # Outer key is Fuel ID (matching AkWarm Fuel IDs), inner key is energy end-use.
+    # Outer key is Fuel ID string, inner key is energy end-use ID string
     # Value is fuel use expressed in MMBTU (remember electricity is in MMBTU also)
-    fuel_use_mmbtu: dict[int, dict[EndUse, float]]
+    fuel_use_mmbtu: dict[Fuel, dict[EndUse, float]]
 
     # Electric coincident peak demand in kW
     elec_demand: float
 
     # Fuel use expressed in fuel units (e.g. gallons) by Fuel ID and End Use
-    fuel_use_units: dict[int, dict[EndUse, float]]
+    fuel_use_units: dict[Fuel, dict[EndUse, float]]
 
     # Fuel Cost by Fuel ID
-    fuel_cost: dict[int, float]
+    fuel_cost: dict[Fuel, float]
 
     # Total Fuel and Electricity costs
     fuel_total_cost: float | None = None
