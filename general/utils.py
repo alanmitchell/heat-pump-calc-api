@@ -75,3 +75,15 @@ def dataframe_to_models(
         model(**(rec if not convert_nans else nan_to_none(rec)))
         for rec in df.to_dict(orient="records")
     ]
+
+def sum_dicts(dict_list):
+    """
+    Given a list of dictionaries with numeric values,
+    return a dictionary where like keys are summed.
+    Missing keys are treated as 0.
+    """
+    result = {}
+    for d in dict_list:
+        for key, value in d.items():
+            result[key] = result.get(key, 0) + value
+    return result

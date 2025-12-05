@@ -14,24 +14,32 @@ from .models import (
     HeatPumpSource,
     TimePeriodResults,
     DetailedModelResults,
-    WallInsulLevel,
     TemperatureTolerance,
+    Fuel,
+    EndUse
 )
 from library import library as lib
-from general.utils import nan_to_none, dataframe_to_models
+from library.models import Fuel_id
+from general.utils import nan_to_none, dataframe_to_models, sum_dicts
+from general.dict2d import Dict2d
 from energy.heat_pump_performance import air_source_performance, ground_source_performance
 
 # ----------- CONSTANTS
 
-ELECTRIC_ID = 1  # The fuel ID for Electricity
+# Days in each month
+DAYS_IN_MONTH = np.array([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
 
 GARAGE_HEATING_SETPT = 55.0  # deg F
 
 # Amount of degrees that ground temperature is above annual average air temperature, deg F
 GROUND_AIR_DELTA_T = 3.0
 
-# Days in each month
-DAYS_IN_MONTH = np.array([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
+# Used to calculate peak electric demand in the month. Only has significance if there is
+# a demand charge in the rate schedule. Since we are evalulating heat pumps, best to set
+# this load factor to reflect the heat pumps contribution to coincident peak demand for
+# the month. Then, electric cost impact of heat pump will be accurate, even though the
+# reported peak demand for the whole home may not be accurate.
+ELEC_LOAD_FACTOR = 0.3
 
 
 def temp_depression(ua_per_ft2: float, balance_point: float, outdoor_temp: float, doors_open: bool) -> float:
@@ -77,7 +85,6 @@ def monthly_lights_apps(avg_kwh: float, frac_variation: float) -> NDArray[np.flo
     return DAYS_IN_MONTH * use_per_day
 
 # ---------------- Main Calculation Method --------------------
-
 
 def model_building(inp: BuildingDescription) -> DetailedModelResults:
     """Main calculation routine that models the home and determines
@@ -254,9 +261,68 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
     # COP by month
     dfm["cop"] = dfm.hp_load_mmbtu / (dfm.hp_kwh * 0.003412)
 
-    # physical units for secondary fuel
-    fuel = exist_heat_fuel  # shortcut variable
-    dfm["secondary_fuel_units"] = dfm["secondary_fuel_mmbtu"] * 1e6 / fuel.btus
+    # split conventional load across primary, secondary systems
+    dfm["conventional_load_mmbtu_primary"] = inp.conventional_heat[0].frac_load_served * dfm.conventional_load_mmbtu
+    dfm["conventional_load_mmbtu_secondary"] = inp.conventional_heat[1].frac_load_served * dfm.conventional_load_mmbtu
+
+    # Loop across months to calculate fuel use by end use in each month
+    fuel_use_mmbtu_all = []
+    elec_demand_all = []
+    fuel_use_units_all = []
+    fuel_cost_all = []
+    fuel_total_cost_all = []
+    for row in dfm.itertuples():
+
+        days_in_mo = DAYS_IN_MONTH[row.Index]
+
+        # initialize data structures for this month
+        fuel_use_mmbtu = Dict2d()
+        fuel_use_units = Dict2d()
+        fuel_cost = {}
+
+        # heat pump electrical use
+        fuel_use_mmbtu.add(Fuel_id.elec, EndUse.space_htg, row.hp_kwh * 0.003412)
+        fuel_use_units.add(Fuel_id.elec, EndUse.space_htg, row.hp_kwh)
+
+        # conventional heating systems
+        for i in range(2):
+
+            htg_sys = inp.conventional_heat[i]
+
+            # get fuel information for this system
+            fuel_id = htg_sys.heat_fuel_id
+            fuel = lib.fuel_from_id(fuel_id)
+            
+            load_served = dfm.conventional_load_mmbtu_primary if i == 0 else dfm.conventional_load_mmbtu_secondary
+            aux_kwh = load_served * inp.conventional_heat[i].aux_elec_use
+            fuel_mmbtu = (load_served - aux_kwh * 0.003412) / htg_sys.heating_effic
+
+            fuel_use_mmbtu.add(fuel_id, EndUse.space_htg, fuel_mmbtu)
+            fuel_use_units.add(fuel_id, EndUse.space_htg, fuel_mmbtu * 1e6 / fuel.btus)
+            fuel_use_mmbtu.add(Fuel_id.elec, EndUse.space_htg, aux_kwh * 0.003412)
+            fuel_use_units.add(Fuel_id.elec, EndUse.space_htg, aux_kwh)
+
+        # *********** DO OTHER END USES HERE *************
+
+        # ************************************************
+
+        # ***** CALCULATE FUEL COST by FUEL TYPE and TOTAL FUEL COST *****
+        fuel_total_cost = 0.0
+
+        fuel_use_mmbtu_all.append(fuel_use_mmbtu)
+        fuel_use_units_all.append(fuel_use_units)
+        fuel_cost_all.append(fuel_cost)
+        fuel_total_cost_all.append(fuel_total_cost)
+
+        # calculate peak electrical demand
+        elec_kwh = fuel_use_units.sum_key1()[Fuel_id.elec]
+        elec_demand_all.append(elec_kwh / days_in_mo / 24.0 / ELEC_LOAD_FACTOR)
+
+    dfm['fuel_use_mmbtu'] = fuel_use_mmbtu_all
+    dfm['elec_demand'] = elec_demand_all
+    dfm['fuel_use_units'] = fuel_use_units_all
+    dfm['fuel_cost'] = fuel_cost_all
+    dfm['fuel_total_cost'] = fuel_total_cost_all
 
     # Add in a column to report the period being summarized
     dfm["period"] = [
@@ -294,35 +360,43 @@ def monthly_to_annual_results(df_monthly: pd.DataFrame) -> pd.Series:
     """Aggregrates a monthly model results DataFrame (with columns that are all
     or a subset of TimePeriodResults) into an Annual Pandas series.
     """
-    # Get a list of numeric columms by removing the 'period' column.
-    numeric_cols = list(df_monthly.columns)
-    numeric_cols.remove("period")
+    # Make a list of the columms to sum.
+    sum_cols = [
+        'hp_load_mmbtu',
+        'hp_kwh',
+        'conventional_load_mmbtu',
+        'conventional_load_mmbtu_primary',
+        'conventional_load_mmbtu_secondary',
+        'fuel_total_cost'
+    ]
+    annual = df_monthly[sum_cols].sum()
 
-    # the most common aggregation is summing so do that to all the columns and
-    # then fix the ones that shouldn't be summed.
-    annual = df_monthly[numeric_cols].sum()
+    # columns to take the max of
+    max_cols = ['hp_capacity_used_max', 'elec_demand']
+    for col in max_cols:
+        annual[col] = df_monthly[col].max()
 
-    # loop through the columns, fixing as needed
-    for col in numeric_cols:
-        if col in (
-            "hp_kw_max",
-            "secondary_kw_max",
-            "space_heat_kw_max",
-            "all_kw_max",
-            "hp_capacity_used_max",
-        ):
-            annual[col] = df_monthly[col].max()
+    annual["hp_load_frac"] = annual.hp_load_mmbtu / (
+            annual.hp_load_mmbtu + annual.conventional_load_mmbtu
+        )
 
-        elif col == "hp_load_frac":
-            annual["hp_load_frac"] = annual.hp_load_mmbtu / (
-                annual.hp_load_mmbtu + annual.conventional_load_mmbtu
-            )
-
-    # the 'cop' column may not be included in the numeric_cols list due to NaN, but it should be inlcuded
+    # calculate annual COP of the heat pump, if present
     if annual.hp_kwh > 0.0:
         annual["cop"] = annual.hp_load_mmbtu / (annual.hp_kwh * 0.003412)
     else:
         annual["cop"] = np.nan
+
+    # loop the months to sum up Dict2d objects
+    fuel_use_mmbtu = Dict2d()
+    fuel_use_units = Dict2d()
+    for row in df_monthly.itertuples():
+        fuel_use_mmbtu.add_object(row.fuel_use_mmbtu)
+        fuel_use_units.add_object(row.fuel_use_units)
+    annual['fuel_use_mmbtu'] = fuel_use_mmbtu
+    annual['fuel_use_units'] = fuel_use_units
+
+    # fuel cost dictionary by fuel type
+    annual['fuel_cost'] = sum_dicts(df_monthly.fuel_cost.values())
 
     # add the period column back in
     annual["period"] = "Annual"
