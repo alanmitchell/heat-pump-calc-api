@@ -316,6 +316,22 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
             price = chg_none_nan(lib.fuel_price(fuel_id, city.id).price)
             return price * (1.0 + sales_tax)
 
+    # -- DHW per day
+    # From AkWarm run, determined DHW load per person at 3 occupant level
+    dhw_mmbtu_per_day = 4.23 / inp.dhw_ef * inp.occupant_count / 365.0
+    fuel = lib.fuel_from_id(inp.dhw_fuel_id)
+    dhw_units_per_day = dhw_mmbtu_per_day * 1e6 / fuel.btus
+
+    # -- Clothes Drying
+    drying_mmbtu_per_day = (0.86 if inp.clothes_drying_fuel_id == Fuel_id.elec else 2.15) * inp.occupant_count / 365.0
+    fuel = lib.fuel_from_id(inp.clothes_drying_fuel_id)
+    drying_units_per_day = drying_mmbtu_per_day * 1e6 / fuel.btus
+
+    # -- Cooking per day
+    cooking_mmbtu_per_day = (0.64 if inp.cooking_fuel_id == Fuel_id.elec else 0.8) * inp.occupant_count / 365.0
+    fuel = lib.fuel_from_id(inp.cooking_fuel_id)
+    cooking_units_per_day = cooking_mmbtu_per_day * 1e6 / fuel.btus
+
     for row in dfm.itertuples():
 
         days_in_mo = DAYS_IN_MONTH[row.Index - 1]
@@ -346,9 +362,19 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
             fuel_use_mmbtu.add(Fuel_id.elec, EndUse.space_htg, aux_kwh * 0.003412)
             fuel_use_units.add(Fuel_id.elec, EndUse.space_htg, aux_kwh)
 
-        # *********** DO OTHER END USES HERE *************
+        # ---- Other End Uses
 
-        # ************************************************
+        # DHW
+        fuel_use_mmbtu.add(inp.dhw_fuel_id, EndUse.dhw, dhw_mmbtu_per_day * days_in_mo)
+        fuel_use_units.add(inp.dhw_fuel_id, EndUse.dhw, dhw_units_per_day * days_in_mo)
+
+        # Clothes Drying
+        fuel_use_mmbtu.add(inp.clothes_drying_fuel_id, EndUse.drying, drying_mmbtu_per_day * days_in_mo)
+        fuel_use_units.add(inp.clothes_drying_fuel_id, EndUse.drying, drying_units_per_day * days_in_mo)
+
+        # Cooking
+        fuel_use_mmbtu.add(inp.cooking_fuel_id, EndUse.cooking, cooking_mmbtu_per_day * days_in_mo)
+        fuel_use_units.add(inp.cooking_fuel_id, EndUse.cooking, cooking_units_per_day * days_in_mo)
 
         # ---- Calculate fuel cost
 
