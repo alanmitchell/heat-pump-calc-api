@@ -11,8 +11,11 @@ from typing import Hashable, Self
 
 class Dict2d:
 
-    def __init__(self, initial_values: dict[Hashable, dict[Hashable, float]] = {}):
-        self.store = initial_values
+    def __init__(self, initial_values: dict[Hashable, dict[Hashable, float]] | None = None):
+        if initial_values:
+            self.store = initial_values
+        else:
+            self.store = {}
 
     def add(self, key1: Hashable, key2: Hashable, value: float) -> float:
         """Add 'value' to the existing value at the (key1, key2) location.
@@ -60,7 +63,7 @@ class Dict2d:
         """Adds the values from the Dict2d object 'obj' to this one, returning
         this new updated object.
         """
-        for k1, d in obj.items():
+        for k1, d in obj.get_all().items():
             for k2, val in d.items():
                 self.add(k1, k2, val)
         return self

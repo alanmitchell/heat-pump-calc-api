@@ -15,14 +15,14 @@ from .models import (
     TimePeriodResults,
     DetailedModelResults,
     TemperatureTolerance,
-    Fuel,
     EndUse
 )
 from library import library as lib
 from library.models import Fuel_id
-from general.utils import nan_to_none, dataframe_to_models, sum_dicts
+from general.utils import nan_to_none, dataframe_to_models, sum_dicts, chg_nonnum, chg_none_nan
 from general.dict2d import Dict2d
 from energy.heat_pump_performance import air_source_performance, ground_source_performance
+from econ.elec_cost import ElecCostCalc
 
 # ----------- CONSTANTS
 
@@ -39,7 +39,7 @@ GROUND_AIR_DELTA_T = 3.0
 # this load factor to reflect the heat pumps contribution to coincident peak demand for
 # the month. Then, electric cost impact of heat pump will be accurate, even though the
 # reported peak demand for the whole home may not be accurate.
-ELEC_LOAD_FACTOR = 0.3
+ELEC_LOAD_FACTOR = 0.35
 
 
 def temp_depression(ua_per_ft2: float, balance_point: float, outdoor_temp: float, doors_open: bool) -> float:
@@ -241,8 +241,8 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
     # calculate heat pump kWh usage
     dfh["hp_kwh"] = dfh.hp_load_mmbtu / dfh.cop / 0.003412
 
-    # Store annual and monthly totals.
-    # Annual totals is a Pandas Series.
+    # Create a monthly summary of the above values.
+    # Do array math to produce as much as possible.
     total_cols = [
         "hp_load_mmbtu",
         "conventional_load_mmbtu",
@@ -265,20 +265,64 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
     dfm["conventional_load_mmbtu_primary"] = inp.conventional_heat[0].frac_load_served * dfm.conventional_load_mmbtu
     dfm["conventional_load_mmbtu_secondary"] = inp.conventional_heat[1].frac_load_served * dfm.conventional_load_mmbtu
 
-    # Loop across months to calculate fuel use by end use in each month
+    # --------------------- MONTHLY LOOP ---------------------------
+    # Loop across months to calculate fuel use by end use in each month. Build up arrays
+    # of monthly values to be later added to the results DataFrame.
     fuel_use_mmbtu_all = []
     elec_demand_all = []
     fuel_use_units_all = []
     fuel_cost_all = []
     fuel_total_cost_all = []
+
+    # Prepare some values and objects that are fixed across all months
+
+    prices = inp.energy_prices     # shortcut variable
+
+    # determine sales tax, which applies to fuel prices and electric utility
+    # rates.
+    if prices.sales_tax_override is not None:
+        sales_tax = chg_nonnum(prices.sales_tax_override, 0.0)
+    else:
+        sales_tax = chg_nonnum(city.BoroughSalesTax, 0.0) + chg_nonnum(city.MunicipalSalesTax, 0.0)
+
+    # Get the electric utility cost object
+    elec_util = lib.util_from_id(prices.utility_id)
+
+    # Some of the fields in the electric utility object may be overridden.
+    # Adjust the object now.
+    if prices.elec_rate_override is not None:
+        # overwrite the block structure with one block
+        elec_util.Blocks = [(None, prices.elec_rate_override)]
+        # zero out the demand charge as that is included in the overridden electric rate.
+        elec_util.DemandCharge = 0.0
+    if prices.pce_rate_override is not None:
+        elec_util.PCE = prices.pce_rate_override
+    if prices.customer_charge_override is not None:
+        elec_util.CustomerChg = prices.customer_charge_override
+    if prices.co2_lbs_per_kwh_override is not None:
+        elec_util.CO2 = prices.co2_lbs_per_kwh_override
+
+    # Create the object that does the actual electric utility cost calculations
+    elec_cost_calc = ElecCostCalc(
+        elec_util, sales_tax=sales_tax, pce_limit=prices.pce_limit
+    )
+
+    def fuel_price(fuel_id: Fuel_id):
+        """Returns fuel price with sales tax give a fuel type of 'fuel_id'
+        """
+        if fuel_id in prices.fuel_price_overrides:
+            return prices.fuel_price_overrides[fuel_id] * (1.0 + sales_tax)
+        else:
+            price = chg_none_nan(lib.fuel_price(fuel_id, city.id).price)
+            return price * (1.0 + sales_tax)
+
     for row in dfm.itertuples():
 
-        days_in_mo = DAYS_IN_MONTH[row.Index]
+        days_in_mo = DAYS_IN_MONTH[row.Index - 1]
 
         # initialize data structures for this month
         fuel_use_mmbtu = Dict2d()
         fuel_use_units = Dict2d()
-        fuel_cost = {}
 
         # heat pump electrical use
         fuel_use_mmbtu.add(Fuel_id.elec, EndUse.space_htg, row.hp_kwh * 0.003412)
@@ -293,7 +337,7 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
             fuel_id = htg_sys.heat_fuel_id
             fuel = lib.fuel_from_id(fuel_id)
             
-            load_served = dfm.conventional_load_mmbtu_primary if i == 0 else dfm.conventional_load_mmbtu_secondary
+            load_served = row.conventional_load_mmbtu_primary if i == 0 else row.conventional_load_mmbtu_secondary
             aux_kwh = load_served * inp.conventional_heat[i].aux_elec_use
             fuel_mmbtu = (load_served - aux_kwh * 0.003412) / htg_sys.heating_effic
 
@@ -306,17 +350,45 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
 
         # ************************************************
 
-        # ***** CALCULATE FUEL COST by FUEL TYPE and TOTAL FUEL COST *****
+        # ---- Calculate fuel cost
+
+        # Structure to hold fuel cost by type of fuel
+        fuel_cost_by_type = {}
+
+        # Tracks total fuel cost
         fuel_total_cost = 0.0
 
-        fuel_use_mmbtu_all.append(fuel_use_mmbtu)
-        fuel_use_units_all.append(fuel_use_units)
-        fuel_cost_all.append(fuel_cost)
-        fuel_total_cost_all.append(fuel_total_cost)
+        # Get the sum of the fuel use in fuel units across fuel types
+        fuel_use_by_fuel_type = fuel_use_units.sum_key1()
 
-        # calculate peak electrical demand
-        elec_kwh = fuel_use_units.sum_key1()[Fuel_id.elec]
-        elec_demand_all.append(elec_kwh / days_in_mo / 24.0 / ELEC_LOAD_FACTOR)
+        # determine electrical peak demand
+        # (should always be some electric use, but just in case)
+        if Fuel_id.elec in fuel_use_by_fuel_type:
+            peak_demand = fuel_use_by_fuel_type[Fuel_id.elec] / days_in_mo / 24.0 / ELEC_LOAD_FACTOR
+        else:
+            peak_demand = 0.0
+        elec_demand_all.append(peak_demand)
+
+        # Loop across fuel use by fuel type
+        for fuel_id, fuel_use in fuel_use_by_fuel_type.items():
+
+            if fuel_id == Fuel_id.elec:
+                # electricity is special case; need to use electric utility rate structure
+                # to determine fuel use
+                elec_cost = elec_cost_calc.monthly_cost(fuel_use, peak_demand)
+                fuel_cost_by_type[Fuel_id.elec] = elec_cost
+                fuel_total_cost += elec_cost
+
+            else:
+                cost = fuel_use * fuel_price(fuel_id)
+                fuel_cost_by_type[fuel_id] = cost
+                fuel_total_cost += cost
+
+        # ---- Add to the arrays tracking monthly values
+        fuel_use_mmbtu_all.append(fuel_use_mmbtu.get_all())
+        fuel_use_units_all.append(fuel_use_units.get_all())
+        fuel_cost_all.append(fuel_cost_by_type)
+        fuel_total_cost_all.append(fuel_total_cost)
 
     dfm['fuel_use_mmbtu'] = fuel_use_mmbtu_all
     dfm['elec_demand'] = elec_demand_all
@@ -390,13 +462,13 @@ def monthly_to_annual_results(df_monthly: pd.DataFrame) -> pd.Series:
     fuel_use_mmbtu = Dict2d()
     fuel_use_units = Dict2d()
     for row in df_monthly.itertuples():
-        fuel_use_mmbtu.add_object(row.fuel_use_mmbtu)
-        fuel_use_units.add_object(row.fuel_use_units)
-    annual['fuel_use_mmbtu'] = fuel_use_mmbtu
-    annual['fuel_use_units'] = fuel_use_units
+        fuel_use_mmbtu.add_object(Dict2d(row.fuel_use_mmbtu))
+        fuel_use_units.add_object(Dict2d(row.fuel_use_units))
+    annual['fuel_use_mmbtu'] = fuel_use_mmbtu.get_all()
+    annual['fuel_use_units'] = fuel_use_units.get_all()
 
     # fuel cost dictionary by fuel type
-    annual['fuel_cost'] = sum_dicts(df_monthly.fuel_cost.values())
+    annual['fuel_cost'] = sum_dicts(df_monthly.fuel_cost.values)
 
     # add the period column back in
     annual["period"] = "Annual"

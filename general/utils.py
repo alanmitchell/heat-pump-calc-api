@@ -21,6 +21,13 @@ def chg_nonnum(val, sub_val):
     else:
         return sub_val
 
+def chg_none_nan(val):
+    """Returns 'val' unless 'val' is None and then it returns math.nan
+    """
+    if val is None:
+        return math.nan
+    else:
+        return val
 
 def to_float(val, sub_val):
     """Try to convert 'val' to a float.  If it fails, return 'sub_val' instead.

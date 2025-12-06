@@ -15,8 +15,7 @@ from .models import (
 )
 from .energy_model import (
     model_building,
-    ELECTRIC_ID,
-    determine_ua_true_up,
+    #determine_ua_true_up,
     monthly_to_annual_results,
 )
 import econ.econ
@@ -31,7 +30,12 @@ from general.utils import (
     nan_to_none,
 )
 
+# DUMMY DEFINITIONS:  REMOVE LATER
+determine_ua_true_up = lambda x, y: None
+
 # --------- Some Constants
+
+ELECTRIC_ID = 1
 
 # The days in each month
 DAYS_IN_MONTH = np.array([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])

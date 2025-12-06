@@ -33,15 +33,6 @@ class BuildingType(str, Enum):
     commercial = "commercial"
     community = "community"
 
-
-class WallInsulLevel(str, Enum):
-    """Description of Wall Insulation"""
-
-    wall2x4 = "wall2x4"  # 2x4 fiberglass wall
-    wall2x6 = "wall2x6"  # 2x6 fiberglass wall
-    wall2x6plus = "wall2x6plus"  # Insulated better than 2x6 fiberglass
-
-
 class TemperatureTolerance(str, Enum):
     """Describes amount of indoor temperature drop that is considered acceptable."""
 
@@ -56,12 +47,6 @@ class EndUse(str, Enum):
     cooking = "cooking"        # cooking
     drying = "drying"          # drying
     misc_elec = "misc_elec"    # other electric lights and appliances
-
-class EVCharging(str, Enum):
-    """Type of Home EV Charging"""
-    none = "none"         # None
-    level_1 = "level_1"   # Level 1, 120 V
-    level_2 = "level_2"   # Level 2, 240 V
 
 # --------------- Pydantic Models for Space Heating Models
 
@@ -144,11 +129,6 @@ class BuildingDescription(BaseModel):
         None  # Description of Heat Pump. If None, then no heat pump.
     )
 
-    building_type: BuildingType = (
-        BuildingType.residential
-    )  # Type of building, relevant for PCE
-    #    applicability and limits.
-
     garage_stall_count: int  # 0: No garage, 1: 1-car garage.  Max is 4.
     bldg_floor_area: (
         float  # Floor area in square feet of home living area, not counting garage.
@@ -158,10 +138,10 @@ class BuildingDescription(BaseModel):
     ua_per_ft2: float    # UA per square foot for main home
 
     dhw_fuel_id: Fuel_id | None = None       # ID of domestic hot water fuel
-    dhw_ef: float                     # Energy Factor of DHW System
+    dhw_ef: float = 0.62                     # Energy Factor of DHW System
     clothes_drying_fuel_id: Fuel_id | None = None   # ID of clothes drying fuel
     cooking_fuel_id: Fuel_id | None = None   # ID of cooking fuel
-    ev_charging: EVCharging             # Type of Home EV charging
+    ev_charging_miles: float = 0.0           # Miles / month of home EV charging
 
     # *** Need to have miscellaneous lights and appliances info here
 
