@@ -141,9 +141,21 @@ class BuildingDescription(BaseModel):
     dhw_ef: float = 0.62                     # Energy Factor of DHW System
     clothes_drying_fuel_id: Fuel_id | None = None   # ID of clothes drying fuel
     cooking_fuel_id: Fuel_id | None = None   # ID of cooking fuel
-    ev_charging_miles: float = 0.0           # Miles / month of home EV charging
 
-    # *** Need to have miscellaneous lights and appliances info here
+    # annual average kWh/day for end uses other than space htg, dhw, cooking,
+    # and clothes drying. Includes lighting, misc. appliances, EV charging, home
+    # solar offset.
+    other_elec_kwh_per_day: float
+
+    # +/- deviation in use/day from average for December and June. 
+    # Expressed as a fraction of the average. If positive
+    # December is higher than average and June is lower. If negative,
+    # December is lower than average and June higher (perhaps EV use patterns).
+    other_elec_seasonality: float = 0.15  
+
+    # informational values to help constrain other electric usage
+    ev_charging_miles: float = 0.0           # Miles / month of home EV charging
+    solar_kw: float = 0.0                    # kW of home PV solar
 
 
 class TimePeriodResults(BaseModel):
