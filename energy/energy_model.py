@@ -65,7 +65,7 @@ def temp_depression(ua_per_ft2: float, balance_point: float, outdoor_temp: float
     temp_depress = temp_delta * r_to_bedroom / (r_to_bedroom + 1.0 / ua_per_ft2)
     return temp_depress
 
-def monthly_other_elec(avg_kwh: float, frac_variation: float) -> NDArray[np.float64]:
+def monthly_misc_elec(avg_kwh: float, frac_variation: float) -> NDArray[np.float64]:
     """
     Returns a numpy Array of 12 kWh values, January - December, representing the kWh used
     in each month for lights and miscellaneous electrical uses, not counting space heat,
@@ -334,7 +334,7 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
 
     # -- Other electric use
     # get an array of other electric use values in kWh
-    other_elec_kwh_by_month = monthly_other_elec(inp.other_elec_kwh_per_day, inp.other_elec_seasonality)
+    misc_elec_kwh_by_month = monthly_misc_elec(inp.misc_elec_kwh_per_day, inp.misc_elec_seasonality)
 
     for row in dfm.itertuples():
 
@@ -381,7 +381,7 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
         fuel_use_units.add(inp.cooking_fuel_id, EndUse.cooking, cooking_units_per_day * days_in_mo)
 
         # Other Electric use
-        kwh = other_elec_kwh_by_month[row.Index - 1]
+        kwh = misc_elec_kwh_by_month[row.Index - 1]
         fuel_use_mmbtu.add(Fuel_id.elec, EndUse.misc_elec, kwh * 0.003412)
         fuel_use_units.add(Fuel_id.elec, EndUse.misc_elec, kwh)
 
