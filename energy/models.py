@@ -199,6 +199,19 @@ class DetailedModelResults(BaseModel):
     design_heat_temp: float  # 99% design heating temperature, deg F
     design_heat_load: float  # 99% design heating load, BTU/hour
 
+class EnergyModelFitInputs(BaseModel):
+    """Inputs needed to fin the Buildng Energy Model to actual Use data
+    """
+    # Description of the building; fit tuning characteristics do not need to be
+    # included, as the fitting process will determine them.
+    building_description: BuildingDescription
+
+    # Fuel use in fuel units (not MMBTU) for each fuel used by the building,
+    # except electricity, as that is addressed separately.
+    actual_fuel_by_type: dict[Fuel_id, float]
+
+    # A 12-element list of the monthly electricity use of the building in kWh.
+    electric_use_by_month: List[float]
 
 # ---------------------------------------------
 
