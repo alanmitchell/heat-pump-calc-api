@@ -188,6 +188,8 @@ class TimePeriodResults(BaseModel):
     # Total Fuel and Electricity costs
     fuel_total_cost: float | None = None
 
+    # CO2 emissions due to the fuel use for the period
+    co2_lbs: float    # pounds of CO2 emitted from building fuel use
 
 class DetailedModelResults(BaseModel):
     """Model results with monthly and annual aggregate detail."""

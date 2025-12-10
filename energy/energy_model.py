@@ -274,6 +274,7 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
     fuel_use_units_all = []
     fuel_cost_all = []
     fuel_total_cost_all = []
+    co2_all = []
 
     # Prepare some values and objects that are fixed across all months
 
@@ -420,17 +421,36 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
                 fuel_cost_by_type[fuel_id] = cost
                 fuel_total_cost += cost
 
+        # ----- Calculate CO2 emissions
+
+        # Tracks CO2 pounds of emissions
+        co2_lbs = 0.0
+
+        # fuel MMBTU by fuel type
+        fuel_mmbtu_by_type = fuel_use_mmbtu.sum_key1()
+        for fuel_id, mmbtu in fuel_mmbtu_by_type.items():
+
+            if fuel_id == Fuel_id.elec:
+                co2_lbs += mmbtu / 0.003412 * elec_util.CO2
+
+            else:
+                fuel_info = lib.fuel_from_id(fuel_id)
+                co2_lbs += mmbtu * fuel_info.co2
+
+
         # ---- Add to the arrays tracking monthly values
         fuel_use_mmbtu_all.append(fuel_use_mmbtu.get_all())
         fuel_use_units_all.append(fuel_use_units.get_all())
         fuel_cost_all.append(fuel_cost_by_type)
         fuel_total_cost_all.append(fuel_total_cost)
+        co2_all.append(co2_lbs)
 
     dfm['fuel_use_mmbtu'] = fuel_use_mmbtu_all
     dfm['elec_demand'] = elec_demand_all
     dfm['fuel_use_units'] = fuel_use_units_all
     dfm['fuel_cost'] = fuel_cost_all
     dfm['fuel_total_cost'] = fuel_total_cost_all
+    dfm['co2_lbs'] = co2_all
 
     # Add in a column to report the period being summarized
     dfm["period"] = [
@@ -475,7 +495,8 @@ def monthly_to_annual_results(df_monthly: pd.DataFrame) -> pd.Series:
         'conventional_load_mmbtu',
         'conventional_load_mmbtu_primary',
         'conventional_load_mmbtu_secondary',
-        'fuel_total_cost'
+        'fuel_total_cost',
+        'co2_lbs'
     ]
     annual = df_monthly[sum_cols].sum()
 
