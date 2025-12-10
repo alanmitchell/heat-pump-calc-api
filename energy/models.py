@@ -74,9 +74,7 @@ class HeatPump(BaseModel):
 class ConventionalHeatingSystem(BaseModel):
     """Describes a non-heat-pump heating system"""
 
-    heat_fuel_id: (
-        Fuel_id  # ID of heating system fuel type
-    )
+    heat_fuel_id: Fuel_id | None = None  # ID of heating system fuel type
     heating_effic: float  # 0 - 1.0 seasonal heating efficiency
     aux_elec_use: float  # Auxiliary fan/pump/controls electric use, expressed as kWh/(MMBTU heat delivered)
     frac_load_served: float = 1.0   # fraction of heating load served by this system
@@ -144,7 +142,7 @@ class BuildingDescription(BaseModel):
 
     # annual average kWh/day for lights and miscellaneous appliances end uses. 
     # Does not include space htg, dhw, cooking, and clothes drying, EV charging, or solar.
-    misc_elec_kwh_per_day: float
+    misc_elec_kwh_per_day: float = 13.0
 
     # +/- deviation in use/day from average for December and June. 
     # Expressed as a fraction of the average. If positive

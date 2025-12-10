@@ -3,10 +3,12 @@
 from fastapi import APIRouter
 
 from . import energy_model as energy
+from . import fit_model as fit
 from . import retrofit_analysis as analyze
 from .models import (
     BuildingDescription,
     DetailedModelResults,
+    EnergyModelFitInputs,
     RetrofitAnalysisInputs,
     RetrofitAnalysisResults,
 )
@@ -21,6 +23,14 @@ router = APIRouter()
 )
 async def model_building_energy(inp: BuildingDescription) -> DetailedModelResults:
     return energy.model_building(inp)
+
+@router.post(
+    "/energy/fit-model",
+    response_model=BuildingDescription,
+    tags=["Energy Models"],
+)
+async def fit_model(inp: EnergyModelFitInputs) -> BuildingDescription:
+    return fit.fit_model(inp)
 
 
 @router.post(

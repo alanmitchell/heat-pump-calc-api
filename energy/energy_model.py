@@ -17,11 +17,12 @@ from .models import (
     TemperatureTolerance,
     EndUse
 )
+from .heat_pump_performance import air_source_performance, ground_source_performance
+
 from library import library as lib
 from library.models import Fuel_id
 from general.utils import nan_to_none, dataframe_to_models, sum_dicts, chg_nonnum, chg_none_nan
 from general.dict2d import Dict2d
-from energy.heat_pump_performance import air_source_performance, ground_source_performance
 from econ.elec_cost import ElecCostCalc
 
 # ----------- CONSTANTS
