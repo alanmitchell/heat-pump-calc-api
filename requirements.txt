@@ -1,8 +1,0 @@
-fastapi[standard]==0.121.3
-gunicorn>=23.0.0
-pandas
-openpyxl
-requests
-simplejson
-numpy_financial
-jinja2
