@@ -87,6 +87,7 @@ def monthly_misc_elec(avg_kwh: float, frac_variation: float) -> NDArray[np.float
 
 # ---------------- Main Calculation Method --------------------
 
+# @profile
 def model_building(inp: BuildingDescription) -> DetailedModelResults:
     """Main calculation routine that models the home and determines
     loads and fuel use by hour.  Also calculates summary results.
@@ -101,10 +102,7 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
     # Do as much processing at this level using array operations, as
     # opposed to processing within the hourly loop further below.
 
-    tmy_site = lib.tmy_from_id(city.TMYid)
-    df_tmy = pd.DataFrame(tmy_site.hourly_data)
-    dfh = df_tmy[["db_temp", "month"]].copy()
-    dfh["day_of_year"] = [i for i in range(1, 366) for _ in range(24)]
+    dfh = lib.tmy_df_from_id(city.TMYid)
 
     if inp.heat_pump is not None:
         # Determine days that the heat pump is running.  Look at the 20th percentile
@@ -172,75 +170,85 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
     # fewer internal/solar in garage
     balance_point_garage = GARAGE_HEATING_SETPT - 4.0 * 0.19 / inp.ua_per_ft2
 
-    # BTU loads in the hour for the heat pump and for the secondary system.
-    hp_load = []
-    conventional_load = []
+    if inp.heat_pump is None:
+        # No heat pump, so many of the columns are simple and fast to calculate.
+        # Important to be fast here because this code is executed many times when attempting
+        # to fit the energy model.
+        home_load = np.maximum(0.0, balance_point_home - dfh.db_temp.values) * ua_home
+        garage_load = np.maximum(0.0, balance_point_garage - dfh.db_temp.values) * ua_garage
 
-    # More complicated calculations are done in this hourly loop.  If processing
-    # time becomes a problem, try to convert the calculations below into array
-    # operations that can be done outside the loop.
+        dfh["conventional_load_mmbtu"] = (home_load + garage_load) / 1e6
+        dfh["hp_load_mmbtu"] = 0.0
+        dfh["hp_capacity_used"] = 0.0
+        dfh["hp_kwh"] = 0.0
 
-    hp_capacity_used = []  # fraction of heat pump capacity used in each hour
+    else:
+        # There is a heat pump and forced to due hourly calculations in a loop.
 
-    for h in dfh.itertuples():
-        # calculate total heat load for the hour.
-        # Really need to recognize that delta-T to outdoors is lower in the adjacent and remote spaces
-        # if there heat pump is the only source of heat. But, I'm saving that for later work.
-        home_load = max(0.0, balance_point_home - h.db_temp) * ua_home
-        garage_load = max(0.0, balance_point_garage - h.db_temp) * ua_garage
-        total_load = home_load + garage_load
-        if not h.running:
-            hp_load.append(0.0)
-            conventional_load.append(total_load)
-            hp_capacity_used.append(0.0)
-        else:
-            # Build up the possible heat pump load, and then limit it to
-            # maximum available from the heat pump.
+        # BTU loads in the hour for the heat pump and for the secondary system.
+        hp_load = []
+        conventional_load = []
+        hp_capacity_used = []  # fraction of heat pump capacity used in each hour
 
-            # Start with all of the load in the spaces exposed to heat pump indoor
-            # units.
-            hp_ld = home_load * inp.heat_pump.frac_exposed_to_hp
+        for h in dfh.itertuples():
+            # calculate total heat load for the hour.
+            # Really need to recognize that delta-T to outdoors is lower in the adjacent and remote spaces
+            # if there heat pump is the only source of heat. But, I'm saving that for later work.
+            home_load = max(0.0, balance_point_home - h.db_temp) * ua_home
+            garage_load = max(0.0, balance_point_garage - h.db_temp) * ua_garage
+            total_load = home_load + garage_load
+            if not h.running:
+                hp_load.append(0.0)
+                conventional_load.append(total_load)
+                hp_capacity_used.append(0.0)
+            else:
+                # Build up the possible heat pump load, and then limit it to
+                # maximum available from the heat pump.
 
-            # Then, garage load if it is heated by the heat pump
-            hp_ld += garage_load * inp.heat_pump.serves_garage
+                # Start with all of the load in the spaces exposed to heat pump indoor
+                # units.
+                hp_ld = home_load * inp.heat_pump.frac_exposed_to_hp
 
-            # For the spaces adjacent to the space heated directly by the heat pump,
-            # first calculate how much cooler those spaces would be without direct
-            # heat.
-            temp_depress = temp_depression(
-                inp.ua_per_ft2,
-                balance_point_home,
-                h.db_temp,
-                inp.heat_pump.doors_open_to_adjacent,
-            )
-            # determine the temp depression tolerance in deg F
-            temp_depress_tolerance = {
-                TemperatureTolerance.low: 2.0,
-                TemperatureTolerance.med: 5.0,
-                TemperatureTolerance.high: 10.0,
-            }[inp.heat_pump.bedroom_temp_tolerance]
-            # if depression is less than this, include the load
-            if temp_depress <= temp_depress_tolerance:
-                # I'm not diminishing the load here for smaller delta-T.  It's possible
-                # the same diminished delta-T was present in the base case (point-source
-                # heating system).  Probably need to refine this.
-                hp_ld += home_load * inp.heat_pump.frac_adjacent_to_hp
+                # Then, garage load if it is heated by the heat pump
+                hp_ld += garage_load * inp.heat_pump.serves_garage
 
-            # limit the heat pump load to its capacity at this temperature
-            hp_ld = min(hp_ld, h.max_hp_output)
+                # For the spaces adjacent to the space heated directly by the heat pump,
+                # first calculate how much cooler those spaces would be without direct
+                # heat.
+                temp_depress = temp_depression(
+                    inp.ua_per_ft2,
+                    balance_point_home,
+                    h.db_temp,
+                    inp.heat_pump.doors_open_to_adjacent,
+                )
+                # determine the temp depression tolerance in deg F
+                temp_depress_tolerance = {
+                    TemperatureTolerance.low: 2.0,
+                    TemperatureTolerance.med: 5.0,
+                    TemperatureTolerance.high: 10.0,
+                }[inp.heat_pump.bedroom_temp_tolerance]
+                # if depression is less than this, include the load
+                if temp_depress <= temp_depress_tolerance:
+                    # I'm not diminishing the load here for smaller delta-T.  It's possible
+                    # the same diminished delta-T was present in the base case (point-source
+                    # heating system).  Probably need to refine this.
+                    hp_ld += home_load * inp.heat_pump.frac_adjacent_to_hp
 
-            hp_load.append(hp_ld)
-            conventional_load.append(total_load - hp_ld)
+                # limit the heat pump load to its capacity at this temperature
+                hp_ld = min(hp_ld, h.max_hp_output)
 
-            # record the fraction of the heat pump capacity being used.
-            hp_capacity_used.append(hp_ld / h.max_hp_output)
+                hp_load.append(hp_ld)
+                conventional_load.append(total_load - hp_ld)
 
-    dfh["hp_load_mmbtu"] = np.array(hp_load) / 1e6
-    dfh["conventional_load_mmbtu"] = np.array(conventional_load) / 1e6
-    dfh["hp_capacity_used"] = hp_capacity_used
+                # record the fraction of the heat pump capacity being used.
+                hp_capacity_used.append(hp_ld / h.max_hp_output)
 
-    # calculate heat pump kWh usage
-    dfh["hp_kwh"] = dfh.hp_load_mmbtu / dfh.cop / 0.003412
+        dfh["hp_load_mmbtu"] = np.array(hp_load) / 1e6
+        dfh["conventional_load_mmbtu"] = np.array(conventional_load) / 1e6
+        dfh["hp_capacity_used"] = np.array(hp_capacity_used)
+
+        # calculate heat pump kWh usage
+        dfh["hp_kwh"] = dfh.hp_load_mmbtu / dfh.cop / 0.003412
 
     # Create a monthly summary of the above values.
     # Do array math to produce as much as possible.
@@ -309,14 +317,25 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
         elec_util, sales_tax=sales_tax, pce_limit=prices.pce_limit
     )
 
-    def fuel_price(fuel_id: Fuel_id):
-        """Returns fuel price with sales tax give a fuel type of 'fuel_id'
-        """
-        if fuel_id in prices.fuel_price_overrides:
-            return prices.fuel_price_overrides[fuel_id] * (1.0 + sales_tax)
-        else:
-            price = chg_none_nan(lib.fuel_price(fuel_id, city.id).price)
-            return price * (1.0 + sales_tax)
+    # Create a dictionary keyed on fuel type that gives the fuel price
+    # accounting for user overrides and sales tax. Only create for the fuels used in this
+    # building, except electricity
+    fuels_used = set([
+        inp.conventional_heat[0].heat_fuel_id,
+        inp.conventional_heat[1].heat_fuel_id,
+        inp.dhw_fuel_id,
+        inp.clothes_drying_fuel_id,
+        inp.cooking_fuel_id
+        ])
+    fuel_price = {}
+    for fuel_id in fuels_used:
+        if fuel_id != Fuel_id.elec and fuel_id is not None:
+            if fuel_id in prices.fuel_price_overrides:
+                fuel_price[fuel_id] = prices.fuel_price_overrides[fuel_id] * (1.0 + sales_tax)
+            else:
+                fuel_info = lib.fuel_from_id(fuel_id)
+                price = chg_none_nan(getattr(city, fuel_info.price_col))
+                fuel_price[fuel_id] = price * (1.0 + sales_tax)
 
     # -- DHW per day
     # From AkWarm run, determined DHW load per person at 3 occupant level
@@ -417,7 +436,7 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
                 fuel_total_cost += elec_cost
 
             else:
-                cost = fuel_use * fuel_price(fuel_id)
+                cost = fuel_use * fuel_price[fuel_id]
                 fuel_cost_by_type[fuel_id] = cost
                 fuel_total_cost += cost
 
@@ -476,6 +495,7 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
     res["annual_results"] = nan_to_none(tot.to_dict())
 
     # Calculate and record design heating load information
+    tmy_site = lib.tmy_from_id(city.TMYid, True)
     design_t = tmy_site.site_info.heating_design_temp
     res["design_heat_temp"] = design_t
     res["design_heat_load"] = ua_home * (
