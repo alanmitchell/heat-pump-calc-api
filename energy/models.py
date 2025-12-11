@@ -191,6 +191,7 @@ class TimePeriodResults(BaseModel):
     # CO2 emissions due to the fuel use for the period
     co2_lbs: float    # pounds of CO2 emitted from building fuel use
 
+
 class DetailedModelResults(BaseModel):
     """Model results with monthly and annual aggregate detail."""
 
@@ -198,6 +199,7 @@ class DetailedModelResults(BaseModel):
     annual_results: TimePeriodResults  # Annual totals of key modeling results
     design_heat_temp: float  # 99% design heating temperature, deg F
     design_heat_load: float  # 99% design heating load, BTU/hour
+
 
 class EnergyModelFitInputs(BaseModel):
     """Inputs needed to fin the Buildng Energy Model to actual Use data
@@ -226,17 +228,16 @@ class RetrofitCost(BaseModel):
     capital_cost: float  # Installation cost, $
     rebate_amount: float = 0.0  # Rebate $ available to offset installation cost
     retrofit_life: int = 14  # Life of heat pump in years
-    op_cost_chg: float = (
-        0.0  # Change in annual heating system operating cost due to use of
-    )
-    #    heat pump. A positive value means increase in operating cost.
-    frac_financed: float = (
-        0.0  # Fraction of the (capital_cost - rebate_amount) that is financed, 0 - 1.0
-    )
+    
+    # Change in annual heating system operating cost due to the retrofit.
+    # A positive value means increase in operating cost.
+    op_cost_chg: float = 0.0
+    
+    loan_amount: float = 0.00      # Amount borrowed to finance the retrofit
     loan_term: int | None = None  # Length of loan in years
-    loan_interest: float | None = (
-        None  # Loan interest rate, expressed as fraction, e.g. 0.055 for 5.5%
-    )
+
+    # Loan interest rate, expressed as fraction, e.g. 0.055 for 5.5%
+    loan_interest: float | None = None
 
 
 class EconomicInputs(BaseModel):
@@ -265,23 +266,6 @@ class EconomicInputs(BaseModel):
     inflation_rate: float = 0.023  
 
 
-class ActualFuelUse(BaseModel):
-    """This model describes the actual fuel and electricity use of the building assuming
-    *no* heat pump, so the electricity use is actual use prior to installing a heat pump.
-    """
-
-    # This is the annual amount of fuel used by the building, the fuel being the type used for space
-    # heating.  Express this value in the normal units used for the fuel, e.g. gallons for oil.
-    secondary_fuel_units: float | None = None
-
-    # If the above "fuel" use was for an electrically-heated home, this field should be set to True if the
-    # fuel use value given (kWh) was just for space heating (no lights & other applicances).
-    annual_electric_is_just_space_heat: bool = False
-
-    # A 12-element list of the monthly electricity use of the building in kWh. If None, code will estimate values.
-    electric_use_by_month: List[float | None] | None = None
-
-
 class RetrofitAnalysisInputs(BaseModel):
     """Describes all the inputs used the analysis of the retrofit"""
 
@@ -290,26 +274,16 @@ class RetrofitAnalysisInputs(BaseModel):
     pre_bldg: BuildingDescription  # Inputs describing the existing, pre-retrofit building.
     post_bldg: BuildingDescription  # Inputs describing the post-retrofit building.
     retrofit_cost: RetrofitCost  # Inputs describing the cost of installing and operating the heat pump
-    economic_inputs: (
-        EconomicInputs  # Fuel and Electricity price inputs and general economic inputs.
-    )
+    economic_inputs: EconomicInputs  # General economic inputs.
+
 
 class MiscRetrofitResults(BaseModel):
-    # the multiplicative factor applied to building UA value in order to match the actual fuel
-    # consumption of the building
-    ua_true_up: float
 
     # reduced pounds per year of CO2 emissions due to heat pump use
     co2_lbs_saved: float
 
     # the annual driving mile equivalent of the above CO2 reduction
     co2_driving_miles_saved: float
-
-    # the incremental price of the heating fuel being avoided, including sales tax
-    fuel_price_incremental: float | None
-
-    # the incremental price of the electricity used by the heat pump
-    elec_rate_incremental: float
 
 
 class RetrofitAnalysisResults(BaseModel):
@@ -323,7 +297,6 @@ class RetrofitAnalysisResults(BaseModel):
     with_retrofit_detail: (
         DetailedModelResults  # monthly and annual detail on the post-retrofit case
     )
-    change_detail: DetailedModelResults  # the changes that occur going from the pre- to post-retrofit case
 
 
 # ------- SAMPLE DATA -------

@@ -44,7 +44,7 @@ async def analyze_retrofit(inp: RetrofitAnalysisInputs) -> RetrofitAnalysisResul
 
 """
 
-Sample JSON Input Data for model-space-heat:
+Sample JSON Input Data:
 
 
 """

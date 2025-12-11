@@ -504,6 +504,7 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
 
     return DetailedModelResults(**res)
 
+# @profile
 def monthly_to_annual_results(df_monthly: pd.DataFrame) -> pd.Series:
     """Aggregrates a monthly model results DataFrame (with columns that are all
     or a subset of TimePeriodResults) into an Annual Pandas series.

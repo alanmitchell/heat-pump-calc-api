@@ -57,7 +57,7 @@ class ModelFitter:
         init_params = [
             0.19,            # UA per ft2
             1.0 if self.bldg.conventional_heat[1] is None else 0.75,    # primary heat load frac
-            7.40 + 0.00411 * self.bldg.bldg_floor_area,     # misc electric kWh/day
+            5.72 + 0.00329 * self.bldg.bldg_floor_area,     # misc electric kWh/day, AkWarm - 25%
             0.15             # seasonal variation
         ]
 
