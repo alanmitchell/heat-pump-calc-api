@@ -20,19 +20,10 @@ from library.models import Fuel_id
 def convert_co2_to_miles_driven(co2_saved: float) -> float:
     """Converts CO2 emissions to a mileage driven
     equivalent for vehicles in the U.S. using EPA
-    methodology:  https://www.epa.gov/energy/greenhouse-gases-equivalencies-calculator-calculations-and-references#miles
+    calculator:  https://www.epa.gov/energy/greenhouse-gas-equivalencies-calculator
     """
-    pounds_in_metric_ton = 2204.62
-    tons_co2_per_gallon = 0.0089
-    avg_gas_mileage_us_fleet = 22
-    mileage_equivalent = (
-        co2_saved
-        / pounds_in_metric_ton
-        / tons_co2_per_gallon
-        * avg_gas_mileage_us_fleet
-    )
 
-    return mileage_equivalent
+    return 1396.0 / 1208.0 * co2_saved
 
 def analyze_retrofit(inp: RetrofitAnalysisInputs) -> RetrofitAnalysisResults:
     """Performs a performance and economic analysis of installing a Heat Pump."""

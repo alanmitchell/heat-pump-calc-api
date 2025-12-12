@@ -61,7 +61,9 @@ bldg_json = """
 	"cooking_fuel_id": "elec",
 	"misc_elec_kwh_per_day": 14.0,
 	"misc_elec_seasonality": 0.15,
-	"ev_charging_miles": 1000,
+	"ev_charging_miles_per_day": 30.0,
+	"ev_miles_per_kwh": 3.0,
+	"ev_seasonality": 0.05,
 	"solar_kw": 2.85
 }
 """

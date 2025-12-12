@@ -47,6 +47,8 @@ class EndUse(str, Enum):
     cooking = "cooking"        # cooking
     drying = "drying"          # drying
     misc_elec = "misc_elec"    # other electric lights and appliances
+    ev_charging = "ev_charging"   # Home charging of EVs
+    pv_solar = 'pv_solar'      # Photovoltaic solar production (shown as a negative value)
 
 # --------------- Pydantic Models for Space Heating Models
 
@@ -156,7 +158,7 @@ class BuildingDescription(BaseModel):
     ev_seasonality: float = 0.0              # Variation of Dec EV kWh/day compared to average, fraction
     
     solar_kw: float = 0.0                    # kW of home PV solar
-    solar_kwh_per_kw: float = 750.0          # Annual kWh produced per solar kW installed
+    solar_kwh_per_kw: float = 700.0          # Annual kWh produced per solar kW installed
 
 
 class TimePeriodResults(BaseModel):

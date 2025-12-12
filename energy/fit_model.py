@@ -58,7 +58,9 @@ class ModelFitter:
             0.19,            # UA per ft2
             1.0 if self.bldg.conventional_heat[1] is None else 0.75,    # primary heat load frac
             5.72 + 0.00329 * self.bldg.bldg_floor_area,     # misc electric kWh/day, AkWarm - 25%
-            0.15             # seasonal variation
+            0.15,             # seasonal variation for misc electric
+            3.0,              # ev miles / kWh
+            0.0,              # ev seasonal variation
         ]
 
         # determine bounds on parameters
@@ -66,7 +68,9 @@ class ModelFitter:
             (0.096, 0.52),    # roughly the 2.5% - 97.5% range according to AkWarm dataset
             (0.4, 1.0),       # Really should be 50% or above if Primary, but may be uncertainty
             (init_params[2] / 2.0 , init_params[2] * 2.0),  # 1/2 to double estimated average
-            (-0.1, 0.30)      # Could be reverse seasonality of snow bird.
+            (-0.1, 0.30),      # Could be reverse seasonality of snow bird.
+            (2.0, 3.5),        # EV miles / kWh
+            (-0.15, 0.15)      # EV seasonality
         ]
 
         self.n = 0
@@ -102,18 +106,23 @@ class ModelFitter:
         self.bldg.conventional_heat[1].frac_load_served = 1.0 - result.x[1]
         self.bldg.misc_elec_kwh_per_day = result.x[2]
         self.bldg.misc_elec_seasonality = result.x[3]
+        self.bldg.ev_miles_per_kwh = result.x[4]
+        self.bldg.ev_seasonality = result.x[5]
         
         return self.bldg
 
     def model_error(self, params):
         # unpack the input parameters and assign to the 
         self.n += 1
-        ua_per_ft2, primary_load_frac, misc_elec, misc_seasonality = params
+        ua_per_ft2, primary_load_frac, misc_elec, misc_seasonality, ev_effic, ev_seasonality = params
+
         self.bldg.ua_per_ft2 = ua_per_ft2
         self.bldg.conventional_heat[0].frac_load_served = primary_load_frac
         self.bldg.conventional_heat[1].frac_load_served = (1.0 - primary_load_frac)
         self.bldg.misc_elec_kwh_per_day = misc_elec
         self.bldg.misc_elec_seasonality = misc_seasonality
+        self.bldg.ev_miles_per_kwh = ev_effic
+        self.bldg.ev_seasonality = ev_seasonality
 
         # run the model
         results = model_building(self.bldg)

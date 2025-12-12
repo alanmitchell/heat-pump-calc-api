@@ -66,24 +66,39 @@ def temp_depression(ua_per_ft2: float, balance_point: float, outdoor_temp: float
     temp_depress = temp_delta * r_to_bedroom / (r_to_bedroom + 1.0 / ua_per_ft2)
     return temp_depress
 
-def monthly_misc_elec(avg_kwh: float, frac_variation: float) -> NDArray[np.float64]:
+def seasonal_use(avg_use_per_day: float, frac_variation: float) -> NDArray[np.float64]:
     """
-    Returns a numpy Array of 12 kWh values, January - December, representing the kWh used
-    in each month for lights and miscellaneous electrical uses, not counting space heat,
-    water heat, cooking and clothes drying. Assumes sinusoidal variation with the June
-    and December being the min/max points on the curve. If 'frac_variation' is positive, June is
-    minimum and December in maximum use; if 'frac_variation' is negative, shape is reversed.
+    Returns a numpy Array of 12 kWh values, January - December, representing the total 
+    energy use in each month given a specified amount of seasonal variaon.
+    Assumes sinusoidal variation with the June and December being the min/max points on the 
+    curve. If 'frac_variation' is positive, June is minimum and December in maximum use;
+    if 'frac_variation' is negative, shape is reversed.
     
-    :param avg_kwh: annual average daily electrical consumption, kWh / day
+    :param avg_use_per_day: annual average energy use / day in any units
     :param frac_variation: difference between use/day for the higest use month and annual average 
         use/day, expressed as a fraction of annual average use per day. Could be negative.
+
+    The return array has values with the same units as 'avg_use_per_day'.
     """
     use_per_day = np.array([0.0] * 12)
     for mo in range(1, 13):
         radians = (mo % 12) / 12 * 2 * pi
-        use_per_day[mo - 1] = avg_kwh + frac_variation * avg_kwh * cos(radians)
+        use_per_day[mo - 1] = avg_use_per_day + frac_variation * avg_use_per_day * cos(radians)
 
     return DAYS_IN_MONTH * use_per_day
+
+def monthly_solar(avg_production_per_day: float) -> NDArray[np.float64]:
+    """Returns monthly kWh production from a solar array having an average per day production
+    of 'avg_production_per_day'. The return value is a 12-element Numpy array.
+
+    *** Note that this is tuned for Southeast Alaska. If use of the model is broadened, the pattern
+    below could be a function of the location or latitude of the building, and not just frozen to one 
+    pattern.
+    """
+    # the production pattern below was developed from a PVWatts run for Juneau,
+    # due South array tilted at 30 degrees.
+    pattern = np.array([0.283, 0.624, 1.005, 1.521, 2.131, 1.738, 1.451, 1.366, 0.753, 0.500, 0.386, 0.220])
+    return pattern * avg_production_per_day * DAYS_IN_MONTH
 
 # ---------------- Main Calculation Method --------------------
 
@@ -353,9 +368,18 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
     fuel = lib.fuel_from_id(inp.cooking_fuel_id)
     cooking_units_per_day = cooking_mmbtu_per_day * 1e6 / fuel.btus
 
-    # -- Other electric use
-    # get an array of other electric use values in kWh
-    misc_elec_kwh_by_month = monthly_misc_elec(inp.misc_elec_kwh_per_day, inp.misc_elec_seasonality)
+    # -- Lights / Misc. Appliances electric use
+    # get an array of Lights/Misc. Appliances electric use values in kWh
+    misc_elec_kwh_by_month = seasonal_use(inp.misc_elec_kwh_per_day, inp.misc_elec_seasonality)
+
+    # -- EV Charging electric use
+    ev_kwh_by_month = seasonal_use(
+        inp.ev_charging_miles_per_day / inp.ev_miles_per_kwh,
+        inp.ev_seasonality
+        )
+    
+    # -- Solar Production. Included as a negative energy end use.
+    solar_kwh_by_month = monthly_solar(inp.solar_kw * inp.solar_kwh_per_kw / 365.0)
 
     for row in dfm.itertuples():
 
@@ -401,10 +425,20 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
         fuel_use_mmbtu.add(inp.cooking_fuel_id, EndUse.cooking, cooking_mmbtu_per_day * days_in_mo)
         fuel_use_units.add(inp.cooking_fuel_id, EndUse.cooking, cooking_units_per_day * days_in_mo)
 
-        # Other Electric use
+        # Lights/Misc Appliance Electric use
         kwh = misc_elec_kwh_by_month[row.Index - 1]
         fuel_use_mmbtu.add(Fuel_id.elec, EndUse.misc_elec, kwh * 0.003412)
         fuel_use_units.add(Fuel_id.elec, EndUse.misc_elec, kwh)
+
+        # Home EV Charging
+        kwh = ev_kwh_by_month[row.Index - 1]
+        fuel_use_mmbtu.add(Fuel_id.elec, EndUse.ev_charging, kwh * 0.003412)
+        fuel_use_units.add(Fuel_id.elec, EndUse.ev_charging, kwh)
+
+        # Solar PV pdroduction
+        kwh = solar_kwh_by_month[row.Index - 1]
+        fuel_use_mmbtu.add(Fuel_id.elec, EndUse.pv_solar, -kwh * 0.003412)
+        fuel_use_units.add(Fuel_id.elec, EndUse.pv_solar, -kwh)
 
         # ---- Calculate fuel cost
 
