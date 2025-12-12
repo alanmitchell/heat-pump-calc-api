@@ -61,6 +61,7 @@ class ModelFitter:
             0.15,             # seasonal variation for misc electric
             3.0,              # ev miles / kWh
             0.0,              # ev seasonal variation
+            650.0,            # solar kWh-annual / kW installed
         ]
 
         # determine bounds on parameters
@@ -70,7 +71,8 @@ class ModelFitter:
             (init_params[2] / 2.0 , init_params[2] * 2.0),  # 1/2 to double estimated average
             (-0.1, 0.30),      # Could be reverse seasonality of snow bird.
             (2.0, 3.5),        # EV miles / kWh
-            (-0.15, 0.15)      # EV seasonality
+            (-0.15, 0.15),     # EV seasonality
+            (450.0, 950.0),    # Solar kWh / kW
         ]
 
         self.n = 0
@@ -85,19 +87,6 @@ class ModelFitter:
                 "ftol": 1e-4
             }
         )
-        '''
-        result = minimize(
-            self.model_error,
-            init_params,
-            method="trust-constr",
-            bounds=bounds,
-            options={
-                "gtol": 1e-6,   # gradient norm tolerance
-                "xtol": 1e-8,   # parameter change tolerance
-                "barrier_tol": 1e-8,  # constraint satisfaction
-            }
-        )
-        '''
         print(result.success, result.x, result.fun, result.nit, self.n)
 
         # Fill out building description with best-fit properties
@@ -108,13 +97,14 @@ class ModelFitter:
         self.bldg.misc_elec_seasonality = result.x[3]
         self.bldg.ev_miles_per_kwh = result.x[4]
         self.bldg.ev_seasonality = result.x[5]
+        self.bldg.solar_kwh_per_kw = result.x[6]
         
         return self.bldg
 
     def model_error(self, params):
-        # unpack the input parameters and assign to the 
+        # unpack the input parameters and assign to the building description
         self.n += 1
-        ua_per_ft2, primary_load_frac, misc_elec, misc_seasonality, ev_effic, ev_seasonality = params
+        ua_per_ft2, primary_load_frac, misc_elec, misc_seasonality, ev_effic, ev_seasonality, solar = params
 
         self.bldg.ua_per_ft2 = ua_per_ft2
         self.bldg.conventional_heat[0].frac_load_served = primary_load_frac
@@ -123,6 +113,7 @@ class ModelFitter:
         self.bldg.misc_elec_seasonality = misc_seasonality
         self.bldg.ev_miles_per_kwh = ev_effic
         self.bldg.ev_seasonality = ev_seasonality
+        self.bldg.solar_kwh_per_kw = solar
 
         # run the model
         results = model_building(self.bldg)
