@@ -217,6 +217,17 @@ class EnergyModelFitInputs(BaseModel):
     # A 12-element list of the monthly electricity use of the building in kWh.
     electric_use_by_month: List[float]
 
+class EnergyModelFitOutput(BaseModel):
+    """Results of fitting the energy model.
+    """
+    # The final building description with the best-fit parameters in the description.
+    building_description: BuildingDescription
+
+    # Error fractions of each of the fuel types that building uses, including electricity.
+    # Here, the electricity error is measured at the annual level (fitting looks at 
+    # monthly errors.)
+    fuel_errors: dict[Fuel_id, float]
+
 # ---------------------------------------------
 
 # Models related to Heat Pump analysis.

@@ -7,7 +7,7 @@ from copy import deepcopy
 import numpy as np
 from scipy.optimize import minimize
 
-from .models import EnergyModelFitInputs, BuildingDescription
+from .models import EnergyModelFitInputs, EnergyModelFitOutput
 from .models import Fuel_id
 from .energy_model import model_building
 
@@ -15,10 +15,10 @@ from library.library import fuel_from_id
 from general.dict2d import Dict2d
 from general.utils import nan_to_none
 
-def fit_model(inp: EnergyModelFitInputs) -> BuildingDescription:
+def fit_model(inp: EnergyModelFitInputs) -> EnergyModelFitOutput:
     """Tunes key properties of a Building Description to best fit actual fuel
-    use data.  Returns the new Building Description, with the key properties set
-    at the best-fit values.
+    use data.  Returns the new Building Description with the key properties set
+    at the best-fit values and returns error fractions.
     
     The properties of the Building Description that are manipulated are:
 
@@ -26,6 +26,9 @@ def fit_model(inp: EnergyModelFitInputs) -> BuildingDescription:
         The 'frac_load_served' property of the Primary and Secondary Conventional Heating Systems
         misc_elec_kwh_per_day
         misc_elec_seasonality
+        EV charging miles / kWh
+        EV charging seasonality
+        Home PV Solar annual production per kW installed.
     """
     model_fitter = ModelFitter(inp)
     return model_fitter.fit()
@@ -87,7 +90,7 @@ class ModelFitter:
                 "ftol": 1e-4
             }
         )
-        print(result.success, result.x, result.fun, result.nit, self.n)
+        print(result.success, result.fun, result.nit, self.n)
 
         # Fill out building description with best-fit properties
         self.bldg.ua_per_ft2 = result.x[0]
@@ -98,8 +101,22 @@ class ModelFitter:
         self.bldg.ev_miles_per_kwh = result.x[4]
         self.bldg.ev_seasonality = result.x[5]
         self.bldg.solar_kwh_per_kw = result.x[6]
-        
-        return self.bldg
+
+        # run the best fit description through the energy model.
+        results = model_building(self.bldg)
+
+        # measure error fractions for fuel types
+        fuel_errors = {}
+        # first get modeled fuel measured in MMBTU
+        fuel_modeled = Dict2d(results.annual_results.fuel_use_mmbtu).sum_key1()
+        for fuel_id, actual_use in self.actual_fuel.items():
+            fuel_errors[fuel_id] = (fuel_modeled[fuel_id] - actual_use) / actual_use
+
+        # now need to add electricity
+        elec_actual_annual = self.elec_actual.sum()
+        fuel_errors[Fuel_id.elec] = (fuel_modeled[Fuel_id.elec] - elec_actual_annual) / elec_actual_annual
+
+        return EnergyModelFitOutput(building_description=self.bldg, fuel_errors=fuel_errors)
 
     def model_error(self, params):
         # unpack the input parameters and assign to the building description

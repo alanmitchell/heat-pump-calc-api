@@ -9,6 +9,7 @@ from .models import (
     BuildingDescription,
     DetailedModelResults,
     EnergyModelFitInputs,
+    EnergyModelFitOutput,
     RetrofitAnalysisInputs,
     RetrofitAnalysisResults,
 )
@@ -26,10 +27,10 @@ async def model_building_energy(inp: BuildingDescription) -> DetailedModelResult
 
 @router.post(
     "/energy/fit-model",
-    response_model=BuildingDescription,
+    response_model=EnergyModelFitOutput,
     tags=["Energy Models"],
 )
-async def fit_model(inp: EnergyModelFitInputs) -> BuildingDescription:
+async def fit_model(inp: EnergyModelFitInputs) -> EnergyModelFitOutput:
     return fit.fit_model(inp)
 
 
