@@ -69,7 +69,7 @@ class AlaskaFormatter(logging.Formatter):
         dt = datetime.fromtimestamp(record.created, tz=ALASKA_TZ)
         if datefmt:
             return dt.strftime(datefmt)
-        return dt.strftime("%Y-%m-%d %H:%M:%S")
+        return dt.strftime("%Y-%m-%d %H:%M:%S AK Time")
 
 formatter = AlaskaFormatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -78,7 +78,6 @@ handler.setFormatter(formatter)
 
 logger = logging.getLogger("app")
 logger.setLevel(logging.INFO)
-logger.propagate = False      # ← prevents double logging
 logger.addHandler(handler)
 
 # Silence the uvicorn logger so we only get one traceback
@@ -87,10 +86,13 @@ uvicorn_error_logger.setLevel(logging.CRITICAL)
 
 def alaska_now_str() -> str:
     """Return current time in Alaska timezone as a string string."""
-    return datetime.now(ALASKA_TZ).strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.now(ALASKA_TZ).strftime("%Y-%m-%d %H:%M:%S AK Time")
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    """Catches unhandled exceptions globally. Both responds to the 
+    User and logs the error.
+    """
     # Build full traceback string
     tb_str = "".join(
         traceback.format_exception(type(exc), exc, exc.__traceback__)
@@ -108,7 +110,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=500,
         content={
-            "detail": "An application error occurred. Please contact alan@analysisnorth.com and report the following error time.",
+            "detail": "An application error occurred. Please contact the developer and report the following error time.",
             "timestamp": alaska_now_str(),
         },
     )
