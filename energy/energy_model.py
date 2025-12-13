@@ -116,7 +116,7 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
     # ------ Make a DataFrame with hourly input information
     # Do as much processing at this level using array operations, as
     # opposed to processing within the hourly loop further below.
-
+    x = 3 / 0
     dfh = lib.tmy_df_from_id(city.TMYid)
 
     if inp.heat_pump is not None:

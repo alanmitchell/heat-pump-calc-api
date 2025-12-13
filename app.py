@@ -1,5 +1,11 @@
+import logging
+import sys
+from datetime import datetime
+from zoneinfo import ZoneInfo
+import traceback
+
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
@@ -54,6 +60,60 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 templates = Jinja2Templates("templates")
 
+# ---- Configure loggers and exception handlers
+
+ALASKA_TZ = ZoneInfo("America/Anchorage")
+
+class AlaskaFormatter(logging.Formatter):
+    def formatTime(self, record, datefmt=None):
+        dt = datetime.fromtimestamp(record.created, tz=ALASKA_TZ)
+        if datefmt:
+            return dt.strftime(datefmt)
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+formatter = AlaskaFormatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+
+handler = logging.StreamHandler(sys.stdout)
+handler.setFormatter(formatter)
+
+logger = logging.getLogger("app")
+logger.setLevel(logging.INFO)
+logger.propagate = False      # ← prevents double logging
+logger.addHandler(handler)
+
+# Silence the uvicorn logger so we only get one traceback
+uvicorn_error_logger = logging.getLogger("uvicorn.error")
+uvicorn_error_logger.setLevel(logging.CRITICAL)
+
+def alaska_now_str() -> str:
+    """Return current time in Alaska timezone as a string string."""
+    return datetime.now(ALASKA_TZ).strftime("%Y-%m-%d %H:%M:%S")
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    # Build full traceback string
+    tb_str = "".join(
+        traceback.format_exception(type(exc), exc, exc.__traceback__)
+    )
+
+    # Log it – DO App Platform will capture this
+    logger.error(
+        "Unhandled exception in request %s %s\n%s",
+        request.method,
+        request.url.path,
+        tb_str,
+    )
+
+    # Minimal info back to the client
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "An application error occurred. Please contact alan@analysisnorth.com and report the following error time.",
+            "timestamp": alaska_now_str(),
+        },
+    )
+
+# ------------------ Routes below here
 
 @app.get("/", include_in_schema=False)
 async def index(request: Request):
