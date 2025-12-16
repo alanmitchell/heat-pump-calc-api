@@ -203,7 +203,10 @@ def refresh_data():
 def periodically_refresh_data():
     """Function to periodically refresh the library data"""
     while True:
-        refresh_data()
+        try:
+            refresh_data()
+        except Exception as e:
+            print(f'Error Refreshing Library Data: {e}')
         time.sleep(LIB_TIMEOUT * 3600.0)
 
 
