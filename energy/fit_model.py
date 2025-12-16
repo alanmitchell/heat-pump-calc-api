@@ -59,7 +59,7 @@ class ModelFitter:
         # determine initial values for the building properties being varied
         init_params = [
             0.19,            # UA per ft2
-            1.0 if self.bldg.conventional_heat[1] is None else 0.75,    # primary heat load frac
+            1.0 if self.bldg.conventional_heat[1].heat_fuel_id is None else 0.75,    # primary heat load frac
             5.72 + 0.00329 * self.bldg.bldg_floor_area,     # misc electric kWh/day, AkWarm - 25%
             0.15,             # seasonal variation for misc electric
             3.0,              # ev miles / kWh
@@ -70,12 +70,12 @@ class ModelFitter:
         # determine bounds on parameters
         bounds = [
             (0.096, 0.52),    # roughly the 2.5% - 97.5% range according to AkWarm dataset
-            (0.4, 1.0),       # Really should be 50% or above if Primary, but may be uncertainty
+            (1.0, 1.0) if self.bldg.conventional_heat[1].heat_fuel_id is None else (0.4, 1.0),   
             (init_params[2] / 2.0 , init_params[2] * 2.0),  # 1/2 to double estimated average
             (-0.1, 0.30),      # Could be reverse seasonality of snow bird.
-            (2.0, 3.5),        # EV miles / kWh
-            (-0.15, 0.15),     # EV seasonality
-            (450.0, 950.0),    # Solar kWh / kW
+            (2.0, 3.5) if self.bldg.ev_charging_miles_per_day else (3.0, 3.0),     # EV miles / kWh
+            (-0.15, 0.15) if self.bldg.ev_charging_miles_per_day else (0.0, 0.0),  # EV seasonality
+            (450.0, 950.0) if self.bldg.solar_kw else (650.0, 650.0) ,    # Solar kWh / kW
         ]
 
         self.n = 0
