@@ -341,6 +341,10 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
         inp.clothes_drying_fuel_id,
         inp.cooking_fuel_id
         ])
+    # None may be in the set if some of these uses are not present. Remove the None
+    if None in fuels_used:
+        fuels_used.remove(None)
+
     fuel_price = {}
     for fuel_id in fuels_used:
         if fuel_id != Fuel_id.elec and fuel_id is not None:
@@ -353,19 +357,28 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
 
     # -- DHW per day
     # From AkWarm run, determined DHW load per person at 3 occupant level
-    dhw_mmbtu_per_day = 4.23 / inp.dhw_ef * inp.occupant_count / 365.0
-    fuel = lib.fuel_from_id(inp.dhw_fuel_id)
-    dhw_units_per_day = dhw_mmbtu_per_day * 1e6 / fuel.btus
+    if inp.dhw_fuel_id is not None:
+        dhw_mmbtu_per_day = 4.23 / inp.dhw_ef * inp.occupant_count / 365.0
+        fuel = lib.fuel_from_id(inp.dhw_fuel_id)
+        dhw_units_per_day = dhw_mmbtu_per_day * 1e6 / fuel.btus
+    else:
+        dhw_mmbtu_per_day = 0.0
 
     # -- Clothes Drying
-    drying_mmbtu_per_day = (0.86 if inp.clothes_drying_fuel_id == Fuel_id.elec else 2.15) * inp.occupant_count / 365.0
-    fuel = lib.fuel_from_id(inp.clothes_drying_fuel_id)
-    drying_units_per_day = drying_mmbtu_per_day * 1e6 / fuel.btus
+    if inp.clothes_drying_fuel_id is not None:
+        drying_mmbtu_per_day = (0.86 if inp.clothes_drying_fuel_id == Fuel_id.elec else 2.15) * inp.occupant_count / 365.0
+        fuel = lib.fuel_from_id(inp.clothes_drying_fuel_id)
+        drying_units_per_day = drying_mmbtu_per_day * 1e6 / fuel.btus
+    else:
+        drying_mmbtu_per_day = 0.0
 
     # -- Cooking per day
-    cooking_mmbtu_per_day = (0.64 if inp.cooking_fuel_id == Fuel_id.elec else 0.8) * inp.occupant_count / 365.0
-    fuel = lib.fuel_from_id(inp.cooking_fuel_id)
-    cooking_units_per_day = cooking_mmbtu_per_day * 1e6 / fuel.btus
+    if inp.cooking_fuel_id is not None:
+        cooking_mmbtu_per_day = (0.64 if inp.cooking_fuel_id == Fuel_id.elec else 0.8) * inp.occupant_count / 365.0
+        fuel = lib.fuel_from_id(inp.cooking_fuel_id)
+        cooking_units_per_day = cooking_mmbtu_per_day * 1e6 / fuel.btus
+    else:
+        cooking_mmbtu_per_day = 0.0
 
     # -- Lights / Misc. Appliances electric use
     # get an array of Lights/Misc. Appliances electric use values in kWh
@@ -399,30 +412,34 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
 
             # get fuel information for this system
             fuel_id = htg_sys.heat_fuel_id
-            fuel = lib.fuel_from_id(fuel_id)
-            
-            load_served = row.conventional_load_mmbtu_primary if i == 0 else row.conventional_load_mmbtu_secondary
-            aux_kwh = load_served * inp.conventional_heat[i].aux_elec_use
-            fuel_mmbtu = (load_served - aux_kwh * 0.003412) / htg_sys.heating_effic
+            if fuel_id is not None:
+                fuel = lib.fuel_from_id(fuel_id)
+                
+                load_served = row.conventional_load_mmbtu_primary if i == 0 else row.conventional_load_mmbtu_secondary
+                aux_kwh = load_served * inp.conventional_heat[i].aux_elec_use
+                fuel_mmbtu = (load_served - aux_kwh * 0.003412) / htg_sys.heating_effic
 
-            fuel_use_mmbtu.add(fuel_id, EndUse.space_htg, fuel_mmbtu)
-            fuel_use_units.add(fuel_id, EndUse.space_htg, fuel_mmbtu * 1e6 / fuel.btus)
-            fuel_use_mmbtu.add(Fuel_id.elec, EndUse.space_htg, aux_kwh * 0.003412)
-            fuel_use_units.add(Fuel_id.elec, EndUse.space_htg, aux_kwh)
+                fuel_use_mmbtu.add(fuel_id, EndUse.space_htg, fuel_mmbtu)
+                fuel_use_units.add(fuel_id, EndUse.space_htg, fuel_mmbtu * 1e6 / fuel.btus)
+                fuel_use_mmbtu.add(Fuel_id.elec, EndUse.space_htg, aux_kwh * 0.003412)
+                fuel_use_units.add(Fuel_id.elec, EndUse.space_htg, aux_kwh)
 
         # ---- Other End Uses
 
         # DHW
-        fuel_use_mmbtu.add(inp.dhw_fuel_id, EndUse.dhw, dhw_mmbtu_per_day * days_in_mo)
-        fuel_use_units.add(inp.dhw_fuel_id, EndUse.dhw, dhw_units_per_day * days_in_mo)
+        if dhw_mmbtu_per_day:
+            fuel_use_mmbtu.add(inp.dhw_fuel_id, EndUse.dhw, dhw_mmbtu_per_day * days_in_mo)
+            fuel_use_units.add(inp.dhw_fuel_id, EndUse.dhw, dhw_units_per_day * days_in_mo)
 
         # Clothes Drying
-        fuel_use_mmbtu.add(inp.clothes_drying_fuel_id, EndUse.drying, drying_mmbtu_per_day * days_in_mo)
-        fuel_use_units.add(inp.clothes_drying_fuel_id, EndUse.drying, drying_units_per_day * days_in_mo)
+        if drying_mmbtu_per_day:
+            fuel_use_mmbtu.add(inp.clothes_drying_fuel_id, EndUse.drying, drying_mmbtu_per_day * days_in_mo)
+            fuel_use_units.add(inp.clothes_drying_fuel_id, EndUse.drying, drying_units_per_day * days_in_mo)
 
         # Cooking
-        fuel_use_mmbtu.add(inp.cooking_fuel_id, EndUse.cooking, cooking_mmbtu_per_day * days_in_mo)
-        fuel_use_units.add(inp.cooking_fuel_id, EndUse.cooking, cooking_units_per_day * days_in_mo)
+        if cooking_mmbtu_per_day:
+            fuel_use_mmbtu.add(inp.cooking_fuel_id, EndUse.cooking, cooking_mmbtu_per_day * days_in_mo)
+            fuel_use_units.add(inp.cooking_fuel_id, EndUse.cooking, cooking_units_per_day * days_in_mo)
 
         # Lights/Misc Appliance Electric use
         kwh = misc_elec_kwh_by_month[row.Index - 1]
