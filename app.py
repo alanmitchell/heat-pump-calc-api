@@ -110,7 +110,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=500,
         content={
-            "detail": "An application error occurred. Please contact the developer and report the following error time.",
+            "detail": "An error occurred in the Heat Pump Calculator API. Please contact the developer and report the following error time:",
             "timestamp": alaska_now_str(),
         },
     )
