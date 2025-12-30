@@ -119,7 +119,7 @@ class ModelFitter:
                 else:
                     fuel_errors[fuel_id] = 0.0
 
-        # now need to add electricity
+        # now need to add annual electricity use.
         elec_actual_annual = self.elec_actual.sum()
         elec_modeled = fuel_modeled.get(Fuel_id.elec, 0.0)
         if elec_actual_annual:
