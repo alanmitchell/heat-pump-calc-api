@@ -110,20 +110,22 @@ class ModelFitter:
         # first get modeled fuel measured in MMBTU
         fuel_modeled = Dict2d(results.annual_results.fuel_use_mmbtu).sum_key1()
         for fuel_id, actual_use in self.actual_fuel.items():
+            modeled = fuel_modeled.get(fuel_id, 0.0)
             if actual_use:
-                fuel_errors[fuel_id] = (fuel_modeled[fuel_id] - actual_use) / actual_use
+                fuel_errors[fuel_id] = (modeled - actual_use) / actual_use
             else:
-                if fuel_modeled[fuel_id]:
+                if modeled:
                     fuel_errors[fuel_id] = 0.9999
                 else:
                     fuel_errors[fuel_id] = 0.0
 
         # now need to add electricity
         elec_actual_annual = self.elec_actual.sum()
+        elec_modeled = fuel_modeled.get(Fuel_id.elec, 0.0)
         if elec_actual_annual:
-            fuel_errors[Fuel_id.elec] = (fuel_modeled[Fuel_id.elec] - elec_actual_annual) / elec_actual_annual
+            fuel_errors[Fuel_id.elec] = (elec_modeled - elec_actual_annual) / elec_actual_annual
         else:
-            if fuel_modeled[Fuel_id.elec]:
+            if elec_modeled:
                 fuel_errors[Fuel_id.elec] = 0.9999
             else:
                 fuel_errors[Fuel_id.elec] = 0.0
