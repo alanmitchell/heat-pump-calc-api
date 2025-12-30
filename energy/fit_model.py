@@ -110,11 +110,23 @@ class ModelFitter:
         # first get modeled fuel measured in MMBTU
         fuel_modeled = Dict2d(results.annual_results.fuel_use_mmbtu).sum_key1()
         for fuel_id, actual_use in self.actual_fuel.items():
-            fuel_errors[fuel_id] = (fuel_modeled[fuel_id] - actual_use) / actual_use
+            if actual_use:
+                fuel_errors[fuel_id] = (fuel_modeled[fuel_id] - actual_use) / actual_use
+            else:
+                if fuel_modeled[fuel_id]:
+                    fuel_errors[fuel_id] = 0.9999
+                else:
+                    fuel_errors[fuel_id] = 0.0
 
         # now need to add electricity
         elec_actual_annual = self.elec_actual.sum()
-        fuel_errors[Fuel_id.elec] = (fuel_modeled[Fuel_id.elec] - elec_actual_annual) / elec_actual_annual
+        if elec_actual_annual:
+            fuel_errors[Fuel_id.elec] = (fuel_modeled[Fuel_id.elec] - elec_actual_annual) / elec_actual_annual
+        else:
+            if fuel_modeled[Fuel_id.elec]:
+                fuel_errors[Fuel_id.elec] = 0.9999
+            else:
+                fuel_errors[Fuel_id.elec] = 0.0
 
         return EnergyModelFitOutput(building_description=self.bldg, fuel_errors=fuel_errors)
 
