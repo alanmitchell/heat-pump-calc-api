@@ -3,6 +3,7 @@ Adjusts certain building characteristics to best match acutal fuel use to
 modeled fuel use.
 """
 from copy import deepcopy
+import math
 
 import numpy as np
 from scipy.optimize import minimize
@@ -48,6 +49,8 @@ class ModelFitter:
         for fuel_id, use in inp.actual_fuel_by_type.items():
             fuel_info = fuel_from_id(fuel_id)
             self.actual_fuel[fuel_id] = use * fuel_info.btus / 1e6
+        # make accessible the original use expressed in fuel units
+        self.actual_fuel_units = inp.actual_fuel_by_type
 
         # convert actual electric use to MMBTU and then store as Numpy array
         self.elec_actual = np.array(inp.electric_use_by_month) * 0.003412
@@ -73,7 +76,7 @@ class ModelFitter:
             (1.0, 1.0) if self.bldg.conventional_heat[1].heat_fuel_id is None else (0.4, 1.0),   
             (init_params[2] / 2.0 , init_params[2] * 2.0),  # 1/2 to double estimated average
             (-0.1, 0.30),      # Could be reverse seasonality of snow bird.
-            (2.0, 3.5) if self.bldg.ev_charging_miles_per_day else (3.0, 3.0),     # EV miles / kWh
+            (1.8, 3.5) if self.bldg.ev_charging_miles_per_day else (3.0, 3.0),     # EV miles / kWh
             (-0.15, 0.15) if self.bldg.ev_charging_miles_per_day else (0.0, 0.0),  # EV seasonality
             (450.0, 950.0) if self.bldg.solar_kw else (650.0, 650.0) ,    # Solar kWh / kW
         ]
@@ -105,32 +108,30 @@ class ModelFitter:
         # run the best fit description through the energy model.
         results = model_building(self.bldg)
 
-        # measure error fractions for fuel types
-        fuel_errors = {}
-        # first get modeled fuel measured in MMBTU
-        fuel_modeled = Dict2d(results.annual_results.fuel_use_mmbtu).sum_key1()
-        for fuel_id, actual_use in self.actual_fuel.items():
+        # Summarize actual, modeled and error for fuels that are used. Use actual
+        # fuel units, not MMBTU.
+        fuel_fit_info = {}    # each value will be a 3-tuple: (actual, modeled, error)
+
+        # first get modeled fuel measured in fuel units
+        fuel_modeled = Dict2d(results.annual_results.fuel_use_units).sum_key1()
+
+        # find fuel IDs for any used fuel, looking at both actual and modeled.
+        used_fuels = set([fuel_id for fuel_id, use in fuel_modeled.items() if use > 0.0])
+        used_fuels |= set([fuel_id for fuel_id, use in self.actual_fuel_units.items() if use > 0.0])
+        for fuel_id in used_fuels:
+            actual = self.actual_fuel_units.get(fuel_id, 0.0)
             modeled = fuel_modeled.get(fuel_id, 0.0)
-            if actual_use:
-                fuel_errors[fuel_id] = (modeled - actual_use) / actual_use
-            else:
-                if modeled:
-                    fuel_errors[fuel_id] = 0.9999
-                else:
-                    fuel_errors[fuel_id] = 0.0
+            # np.divide will produce inf, -inf, or nan if a 0.0 denominator
+            error = float(np.divide(modeled - actual, actual))
+            fuel_fit_info[fuel_id] = (actual, modeled, error)
 
         # now need to add annual electricity use.
         elec_actual_annual = self.elec_actual.sum()
         elec_modeled = fuel_modeled.get(Fuel_id.elec, 0.0)
-        if elec_actual_annual:
-            fuel_errors[Fuel_id.elec] = (elec_modeled - elec_actual_annual) / elec_actual_annual
-        else:
-            if elec_modeled:
-                fuel_errors[Fuel_id.elec] = 0.9999
-            else:
-                fuel_errors[Fuel_id.elec] = 0.0
+        elec_error = float(np.divide(elec_modeled - elec_actual_annual, elec_actual_annual))
+        fuel_fit_info[Fuel_id.elec] = (elec_actual_annual, elec_modeled, elec_error)
 
-        return EnergyModelFitOutput(building_description=self.bldg, fuel_errors=fuel_errors)
+        return EnergyModelFitOutput(building_description=self.bldg, fuel_fit_info=fuel_fit_info)
 
     def model_error(self, params):
         # unpack the input parameters and assign to the building description

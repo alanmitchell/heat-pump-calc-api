@@ -223,10 +223,10 @@ class EnergyModelFitOutput(BaseModel):
     # The final building description with the best-fit parameters in the description.
     building_description: BuildingDescription
 
-    # Error fractions of each of the fuel types that building uses, including electricity.
-    # Here, the electricity error is measured at the annual level (fitting looks at 
-    # monthly errors.)
-    fuel_errors: dict[Fuel_id, float]
+    # Fit information of each of the fuel types that building uses, including electricity.
+    # The Tuple is (actual use, modeled use, model error fraction). Electricity is presented
+    # on an annual total basis even though fitting used monthly values.
+    fuel_fit_info: dict[Fuel_id, Tuple[float, float, float]]
 
 # ---------------------------------------------
 
