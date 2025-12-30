@@ -123,14 +123,20 @@ class ModelFitter:
         for fuel_id in used_fuels:
             actual = self.actual_fuel_units.get(fuel_id, 0.0)
             modeled = fuel_modeled.get(fuel_id, 0.0)
-            # np.divide will produce inf, -inf, or nan if a 0.0 denominator
-            error = float(np.divide(modeled - actual, actual))
+            if actual != 0.0:
+                error = (modeled - actual) / actual
+            else:
+                # JSON didn't like math.inf. Use 0.999 instead
+                error = math.copysign(0.999, modeled)
             fuel_fit_info[fuel_id] = (actual, modeled, error)
 
         # now need to add annual electricity use.
         elec_actual_annual = self.elec_actual_kwh.sum()
         elec_modeled = fuel_modeled.get(Fuel_id.elec, 0.0)
-        elec_error = float(np.divide(elec_modeled - elec_actual_annual, elec_actual_annual))
+        if elec_actual_annual != 0.0:
+            elec_error = (elec_modeled - elec_actual_annual) / elec_actual_annual
+        else:
+            elec_error = math.copysign(0.999, elec_modeled)
         fuel_fit_info[Fuel_id.elec] = (elec_actual_annual, elec_modeled, elec_error)
 
         return EnergyModelFitOutput(building_description=self.bldg, fuel_fit_info=fuel_fit_info)
