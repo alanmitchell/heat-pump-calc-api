@@ -54,6 +54,8 @@ class ModelFitter:
 
         # convert actual electric use to MMBTU and then store as Numpy array
         self.elec_actual = np.array(inp.electric_use_by_month) * 0.003412
+        # also retain original.
+        self.elec_actual_kwh = np.array(inp.electric_use_by_month)
 
     def fit(self):
         """Determine the best-fitting property values of the building description to
@@ -126,7 +128,7 @@ class ModelFitter:
             fuel_fit_info[fuel_id] = (actual, modeled, error)
 
         # now need to add annual electricity use.
-        elec_actual_annual = self.elec_actual.sum()
+        elec_actual_annual = self.elec_actual_kwh.sum()
         elec_modeled = fuel_modeled.get(Fuel_id.elec, 0.0)
         elec_error = float(np.divide(elec_modeled - elec_actual_annual, elec_actual_annual))
         fuel_fit_info[Fuel_id.elec] = (elec_actual_annual, elec_modeled, elec_error)
