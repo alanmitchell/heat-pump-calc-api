@@ -4,6 +4,8 @@ modeled fuel use.
 """
 from copy import deepcopy
 import math
+import functools
+import json
 
 import numpy as np
 from scipy.optimize import minimize
@@ -14,7 +16,7 @@ from .energy_model import model_building
 
 from library.library import fuel_from_id
 from general.dict2d import Dict2d
-from general.utils import nan_to_none
+
 
 def fit_model(inp: EnergyModelFitInputs) -> EnergyModelFitOutput:
     """Tunes key properties of a Building Description to best fit actual fuel
@@ -31,8 +33,21 @@ def fit_model(inp: EnergyModelFitInputs) -> EnergyModelFitOutput:
         EV charging seasonality
         Home PV Solar annual production per kW installed.
     """
+    # call a function with a JSON input so that the function can be cached.
+    # A Pydantic object is not hashable so can't be lru cached.
+    inp_dict = inp.model_dump(mode='json')
+    inp_cacheable = json.dumps(inp_dict, sort_keys=True, separators=(",", ":"))
+    return fit_model_json_input(inp_cacheable)
+
+@functools.lru_cache(maxsize=100)
+def fit_model_json_input(inp_json):
+
+    # Build a Pydantic object from the JSON to use in the ModelFitter class.
+    # (dot access to propertiess is nice.)
+    inp = EnergyModelFitInputs.model_validate_json(inp_json)
     model_fitter = ModelFitter(inp)
     return model_fitter.fit()
+
 
 class ModelFitter:
 
@@ -95,7 +110,7 @@ class ModelFitter:
                 "ftol": 1e-4
             }
         )
-        print(result.success, result.fun, result.nit, self.n)
+        #print(result.success, result.fun, result.nit, self.n)
 
         # Fill out building description with best-fit properties
         self.bldg.ua_per_ft2 = result.x[0]
