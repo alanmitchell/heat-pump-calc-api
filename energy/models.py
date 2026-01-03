@@ -25,6 +25,13 @@ class HeatPumpSource(str, Enum):
     ground = "ground"
     water = "water"
 
+class HeatPumpWaterHeaterSource(str, Enum):
+    """Source of heat for a heat pump water heater. Used to determine
+    additional space heating load due to the water heater."""
+    main_home = "main_home"
+    garage = "garage"
+    outdoors = "outdoors"
+
 class BuildingType(str, Enum):
     """Type of Building. Only relevant for determine the amount
     of PCE assistance that the building is eligible for."""
@@ -139,6 +146,7 @@ class BuildingDescription(BaseModel):
 
     dhw_fuel_id: Fuel_id | None = None       # ID of domestic hot water fuel
     dhw_ef: float = 0.62                     # Energy Factor of DHW System
+    dhw_hpwh_source: HeatPumpWaterHeaterSource | None = None   # Source of heat for heat pump water heater
     clothes_drying_fuel_id: Fuel_id | None = None   # ID of clothes drying fuel
     cooking_fuel_id: Fuel_id | None = None   # ID of cooking fuel
 

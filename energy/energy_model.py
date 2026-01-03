@@ -12,6 +12,7 @@ import pandas as pd
 from .models import (
     BuildingDescription,
     HeatPumpSource,
+    HeatPumpWaterHeaterSource,
     TimePeriodResults,
     DetailedModelResults,
     TemperatureTolerance,
@@ -184,12 +185,36 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
     # fewer internal/solar in garage
     balance_point_garage = GARAGE_HEATING_SETPT - 4.0 * 0.19 / inp.ua_per_ft2
 
+    # Determine domestic hotwater load per day, based on number of occupants.
+    # Used an AkWarm run to determin DHW load per person at the 3 occupant level
+    if inp.dhw_fuel_id is not None:
+        dhw_mmbtu_load_per_day = 4.23 * inp.occupant_count / 365.0
+    else:
+        dhw_mmbtu_load_per_day = 0.0
+
+    # If this is a heat pump water heater (as indicated by fuel type and EF > 1),
+    # determine how much space heating load is created per day due to possible heat 
+    # extraction from the building. Express as MMBTU / day of space heating load.
+    garage_hpwh_load = 0.0
+    main_home_hpwh_load = 0.0
+    if inp.dhw_fuel_id == Fuel_id.elec and inp.dhw_ef > 1.0:
+        match inp.dhw_hpwh_source:
+            case HeatPumpWaterHeaterSource.garage:
+                garage_hpwh_load = dhw_mmbtu_load_per_day * (1.0 - inp.dhw_ef) / inp.dhw_ef
+                main_home_hpwh_load = 0.0
+
+            case HeatPumpWaterHeaterSource.main_home:
+                garage_hpwh_load = 0.0
+                main_home_hpwh_load = dhw_mmbtu_load_per_day * (1.0 - inp.dhw_ef) / inp.dhw_ef
+
     if inp.heat_pump is None:
         # No heat pump, so many of the columns are simple and fast to calculate.
         # Important to be fast here because this code is executed many times when attempting
         # to fit the energy model.
         home_load = np.maximum(0.0, balance_point_home - dfh.db_temp.values) * ua_home
+        home_load += main_home_hpwh_load / 24.0    # simplifying assumption: even spread across hours
         garage_load = np.maximum(0.0, balance_point_garage - dfh.db_temp.values) * ua_garage
+        garage_load += garage_hpwh_load / 24.0
 
         dfh["conventional_load_mmbtu"] = (home_load + garage_load) / 1e6
         dfh["hp_load_mmbtu"] = 0.0
@@ -209,7 +234,9 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
             # Really need to recognize that delta-T to outdoors is lower in the adjacent and remote spaces
             # if there heat pump is the only source of heat. But, I'm saving that for later work.
             home_load = max(0.0, balance_point_home - h.db_temp) * ua_home
+            home_load += main_home_hpwh_load / 24.0    # simplifying assumption: even spread across hours
             garage_load = max(0.0, balance_point_garage - h.db_temp) * ua_garage
+            garage_load += garage_hpwh_load / 24.0
             total_load = home_load + garage_load
             if not h.running:
                 hp_load.append(0.0)
@@ -356,9 +383,8 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
                 fuel_price[fuel_id] = price * (1.0 + sales_tax)
 
     # -- DHW per day
-    # From AkWarm run, determined DHW load per person at 3 occupant level
     if inp.dhw_fuel_id is not None:
-        dhw_mmbtu_per_day = 4.23 / inp.dhw_ef * inp.occupant_count / 365.0
+        dhw_mmbtu_per_day = dhw_mmbtu_load_per_day / inp.dhw_ef
         fuel = lib.fuel_from_id(inp.dhw_fuel_id)
         dhw_units_per_day = dhw_mmbtu_per_day * 1e6 / fuel.btus
     else:
