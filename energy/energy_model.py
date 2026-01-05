@@ -194,18 +194,18 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
 
     # If this is a heat pump water heater (as indicated by fuel type and EF > 1),
     # determine how much space heating load is created per day due to possible heat 
-    # extraction from the building. Express as MMBTU / day of space heating load.
+    # extraction from the building. Express as BTU / day of space heating load.
     garage_hpwh_load = 0.0
     main_home_hpwh_load = 0.0
     if inp.dhw_fuel_id == Fuel_id.elec and inp.dhw_ef > 1.0:
         match inp.dhw_hpwh_source:
             case HeatPumpWaterHeaterSource.garage:
-                garage_hpwh_load = dhw_mmbtu_load_per_day * (1.0 - inp.dhw_ef) / inp.dhw_ef
+                garage_hpwh_load = dhw_mmbtu_load_per_day * (inp.dhw_ef - 1.0) / inp.dhw_ef * 1e6
                 main_home_hpwh_load = 0.0
 
             case HeatPumpWaterHeaterSource.main_home:
                 garage_hpwh_load = 0.0
-                main_home_hpwh_load = dhw_mmbtu_load_per_day * (1.0 - inp.dhw_ef) / inp.dhw_ef
+                main_home_hpwh_load = dhw_mmbtu_load_per_day * (inp.dhw_ef - 1.0) / inp.dhw_ef * 1e6
 
     if inp.heat_pump is None:
         # No heat pump, so many of the columns are simple and fast to calculate.
