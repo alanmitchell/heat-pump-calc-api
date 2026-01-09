@@ -15,6 +15,7 @@ from .energy_model import (
 import econ.econ
 from econ.models import InitialAmount, EscalatingFlow, PatternFlow, CashFlowInputs
 from library.models import Fuel_id
+from general.dict2d import Dict2d
 
 
 def convert_co2_to_miles_driven(co2_saved: float) -> float:
@@ -53,6 +54,26 @@ def analyze_retrofit(inp: RetrofitAnalysisInputs) -> RetrofitAnalysisResults:
         misc_res["co2_lbs_saved"]
     )
     res['misc'] = misc_res
+
+    # Calculate changes in fuel use by fuel, both in terms of fuel units and $.
+    # First, fuel units, which come in a two-level dictionary keyed on fuel ID, then end use.
+    # collapse to 1-level dicts keyed on Fuel ID
+    base_units = Dict2d(en_base.annual_results.fuel_use_units).sum_key1()
+    retrofit_units = Dict2d(en_post.annual_results.fuel_use_units).sum_key1()
+    # determine all the fuels in use, including pre- and post-retrofit.
+    all_fuels = set(base_units.keys()) | set(retrofit_units.keys())
+    fuel_change_units = {}
+    for fuel_id in all_fuels:
+        fuel_change_units[fuel_id] = retrofit_units.get(fuel_id, 0.0) - base_units.get(fuel_id, 0.0)
+    # now fuel cost, which comes in a 1-level dictionary by fuel type
+    fuel_change_cost = {}
+    for fuel_id in all_fuels:
+        fuel_change_cost[fuel_id] = en_post.annual_results.fuel_cost.get(fuel_id, 0.0) - \
+            en_base.annual_results.fuel_cost.get(fuel_id, 0.0)
+    res['fuel_change'] = {
+        'units': fuel_change_units,
+        'cost': fuel_change_cost
+    }
 
     # ---------------- Cash Flow Analysis
 

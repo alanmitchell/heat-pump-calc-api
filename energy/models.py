@@ -307,10 +307,15 @@ class MiscRetrofitResults(BaseModel):
     co2_driving_miles_saved: float
 
 
+class FuelChange(BaseModel):
+    units: dict[Fuel_id, float]        # Change by fuel type expressed in units
+    cost: dict[Fuel_id, float]         # Change by fuel type express in cost
+
 class RetrofitAnalysisResults(BaseModel):
     """Results from the analysis of installing a heat pump."""
 
     misc: MiscRetrofitResults  # miscellaneous results
+    fuel_change: FuelChange
     financial: CashFlowAnalysis  # cash flow and financial results for heat pump install
     base_case_detail: (
         DetailedModelResults  # monthly and annual detail on the existing, pre-retrofit case
