@@ -38,14 +38,14 @@ async def fuels() -> List[Choice]:
 
 
 @router.get("/lib/fuels/{fuel_id}", response_model=Fuel, tags=["Library"])
-async def fuel(fuel_id: int) -> Fuel:
+async def fuel(fuel_id: str) -> Fuel:
     return lib.fuel_from_id(fuel_id)
 
 
 @router.get(
     "/lib/fuelprice/{fuel_id}/{city_id}", response_model=FuelPrice, tags=["Library"]
 )
-async def fuel_price(fuel_id: int, city_id: int) -> FuelPrice:
+async def fuel_price(fuel_id: str, city_id: int) -> FuelPrice:
     return lib.fuel_price(fuel_id, city_id)
 
 
