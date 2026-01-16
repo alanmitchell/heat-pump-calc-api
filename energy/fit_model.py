@@ -154,7 +154,11 @@ class ModelFitter:
             elec_error = math.copysign(0.999, elec_modeled)
         fuel_fit_info[Fuel_id.elec] = (elec_actual_annual, elec_modeled, elec_error)
 
-        return EnergyModelFitOutput(building_description=self.bldg, fuel_fit_info=fuel_fit_info)
+        return EnergyModelFitOutput(
+            building_description=self.bldg, 
+            fuel_fit_info=fuel_fit_info,
+            model_results=results
+            )
 
     def model_error(self, params):
         # unpack the input parameters and assign to the building description

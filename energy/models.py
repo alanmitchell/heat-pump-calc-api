@@ -236,6 +236,10 @@ class EnergyModelFitOutput(BaseModel):
     # on an annual total basis even though fitting used monthly values.
     fuel_fit_info: dict[Fuel_id, Tuple[float, float, float]]
 
+    # The energy model results of running the final building description through the energy
+    # model.
+    model_results: DetailedModelResults
+
 # ---------------------------------------------
 
 # Models related to Heat Pump analysis.
