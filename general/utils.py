@@ -21,6 +21,13 @@ def chg_nonnum(val, sub_val):
     else:
         return sub_val
 
+def chg_none_nan(val):
+    """Returns 'val' unless 'val' is None and then it returns math.nan
+    """
+    if val is None:
+        return math.nan
+    else:
+        return val
 
 def to_float(val, sub_val):
     """Try to convert 'val' to a float.  If it fails, return 'sub_val' instead.
@@ -75,3 +82,15 @@ def dataframe_to_models(
         model(**(rec if not convert_nans else nan_to_none(rec)))
         for rec in df.to_dict(orient="records")
     ]
+
+def sum_dicts(dict_list):
+    """
+    Given a list of dictionaries with numeric values,
+    return a dictionary where like keys are summed.
+    Missing keys are treated as 0.
+    """
+    result = {}
+    for d in dict_list:
+        for key, value in d.items():
+            result[key] = result.get(key, 0) + value
+    return result

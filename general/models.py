@@ -7,7 +7,7 @@ class Choice(BaseModel):
     """Used when a list of choices is needed. 'id' is a unique identifier for the choice."""
 
     label: str
-    id: int
+    id: int | str
 
 
 class Message(BaseModel):

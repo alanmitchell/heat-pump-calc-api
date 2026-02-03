@@ -51,7 +51,7 @@ def cities() -> List[Choice]:
     city_list.sort()  # sorts in place; returns None
     return [Choice(label=label, id=id) for label, id in city_list]
 
-
+@functools.lru_cache(maxsize=50)
 def city_from_id(city_id) -> City:
     """Returns a dictionary containing the city information for the City
     identified by 'city_id'.
@@ -76,7 +76,7 @@ def utilities() -> List[Choice]:
     util_list.sort()
     return [Choice(label=label, id=id) for label, id in util_list]
 
-
+@functools.lru_cache(maxsize=50)
 def util_from_id(util_id) -> Utility:
     """Returns a dictionary containing all of the Utility information for
     the Utility identified by util_id.
@@ -94,7 +94,7 @@ def fuels() -> List[Choice]:
     fuel_list = list(zip(df_fuel.desc, df_fuel.index))
     return [Choice(label=label, id=id) for label, id in fuel_list]
 
-
+@functools.lru_cache(maxsize=50)
 def fuel_from_id(fuel_id) -> Fuel:
     """Returns fuel information for the fuel with
     and ID of 'fuel_id'
@@ -103,7 +103,7 @@ def fuel_from_id(fuel_id) -> Fuel:
     fuel_dict["id"] = fuel_id
     return Fuel(**fuel_dict)
 
-
+@functools.lru_cache(maxsize=50)
 def fuel_price(fuel_id, city_id) -> FuelPrice:
     """Returns the fuel price for the fuel identified by the ID of
     'fuel_id' for the city identified by 'city_id'.
@@ -130,8 +130,8 @@ def tmys() -> List[TMYmeta]:
     return dataframe_to_models(df_tmy_meta, TMYmeta)
 
 
-@functools.lru_cache(maxsize=50)  # caches the TMY dataframes cuz retrieved remotely
-def tmy_from_id(tmy_id, site_info_only=False) -> TMYdataset:
+@functools.lru_cache(maxsize=50)  # caches the TMY data cuz retrieved remotely
+def tmy_from_id(tmy_id: int, site_info_only: bool = False) -> TMYdataset:
     """Returns a list of TMY hourly records and meta data for the climate site identified
     by 'tmy_id'.
     """
@@ -144,6 +144,13 @@ def tmy_from_id(tmy_id, site_info_only=False) -> TMYdataset:
     else:
         return TMYdataset(site_info=site_info)
 
+@functools.lru_cache(maxsize=50)  # caches the TMY data cuz retrieved remotely
+def tmy_df_from_id(tmy_id: int) -> pd.DataFrame:
+    """Returns a DataFrame with columns limited to what is typically needed
+    """
+    df = get_df(f"tmy3/{tmy_id}.pkl")[["db_temp", "month"]]
+    df["day_of_year"] = [i for i in range(1, 366) for _ in range(24)]
+    return df
 
 # --------------------------------------------------------------------------------------
 
@@ -196,7 +203,10 @@ def refresh_data():
 def periodically_refresh_data():
     """Function to periodically refresh the library data"""
     while True:
-        refresh_data()
+        try:
+            refresh_data()
+        except Exception as e:
+            print(f'Error Refreshing Library Data: {e}')
         time.sleep(LIB_TIMEOUT * 3600.0)
 
 

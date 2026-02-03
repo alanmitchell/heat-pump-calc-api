@@ -1,10 +1,25 @@
 """Models related to the Library."""
 
 from typing import List, Tuple, Optional, Dict
+from enum import Enum
 from pydantic import BaseModel
 
 from general.models import Choice
 
+class Fuel_id(str, Enum):
+    """Fuel types."""
+
+    elec = "elec"
+    ng = "ng"
+    propane = "propane"
+    oil1 = "oil1"
+    oil2 = "oil2"
+    birch = "birch"
+    spruce = "spruce"
+    pellets = "pellets"
+    coal = "coal"
+    steam = "steam"
+    hot_water = "hot_water"
 
 class City(BaseModel):
     """Information about one city."""
@@ -65,7 +80,7 @@ class Utility(BaseModel):
 
 
 class Fuel(BaseModel):
-    id: int  # ID of this fuel type
+    id: Fuel_id  # ID of this fuel type
     desc: str  # Name of fuel
     unit: str  # Measurement unit of fuel, e.g. 'gallon'
     btus: float  # BTUs per unit of fuel
@@ -85,8 +100,8 @@ class Fuel(BaseModel):
 class FuelPrice(BaseModel):
     """A price for a particular fuel in a particular city."""
 
-    city: str  # ID of city
-    fuel: str  # ID of fuel
+    city: str  # name of city
+    fuel: str  # name of fuel
     price: float | None  # $/unit for this fuel in the specified city
 
 
