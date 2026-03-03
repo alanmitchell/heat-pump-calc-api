@@ -173,7 +173,7 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
     # Inputs provided UA / ft2 for the main home. We assume garage is 10% higher
     # due to higher air leakage.    
     ua_home = inp.ua_per_ft2 * inp.bldg_floor_area
-    garage_area = (0, 14 * 22, 22 * 22, 36 * 25, 48 * 28)[inp.garage_stall_count]
+    garage_area = (0, 14 * 22, 22 * 22, 36 * 25, 48 * 28, 60 * 28)[inp.garage_stall_count]
     ua_garage = inp.ua_per_ft2 * 1.1 * garage_area
 
     # Balance Points of main home and garage
