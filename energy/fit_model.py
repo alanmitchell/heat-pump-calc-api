@@ -90,7 +90,7 @@ class ModelFitter:
         # determine bounds on parameters
         bounds = [
             (0.096, 0.52),    # roughly the 2.5% - 97.5% range according to AkWarm dataset
-            (1.0, 1.0) if self.bldg.conventional_heat[1].heat_fuel_id is None else (0.4, 1.0),   
+            (1.0, 1.0) if self.bldg.conventional_heat[1].heat_fuel_id is None else (0.001, 1.0),   
             (init_params[2] / 2.0 , init_params[2] * 2.0),  # 1/2 to double estimated average
             (-0.1, 0.30),      # Could be reverse seasonality of snow bird.
             (1.8, 3.5) if self.bldg.ev_charging_miles_per_day else (3.0, 3.0),     # EV miles / kWh
