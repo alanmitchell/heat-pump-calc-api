@@ -16,8 +16,8 @@ import energy.api_router
 import econ.api_router
 from general.models import Version
 
-VERSION = "0.4"
-VERSION_DATE = "2026-02-02"
+VERSION = "0.5"
+VERSION_DATE = "2026-03-06"
 
 description = """
 The Alaska Heat Pump Calculator API allows for modeling of heat pump performance
