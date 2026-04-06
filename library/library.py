@@ -15,6 +15,7 @@ import time
 from typing import List
 import threading
 
+import numpy as np
 import pandas as pd
 import requests
 
@@ -31,6 +32,9 @@ base_url = "https://github.com/alanmitchell/akwlib-export/raw/main/data/v01/"
 # download the freshest AkWarm data.
 LIB_TIMEOUT = 12.0  # units are Hours
 
+# URL for fetching utility rate overrides from a Google Sheets spreadsheet
+GSHEET_OVERRIDES_URL = "https://docs.google.com/spreadsheets/d/1vWYfVsTmfAZ5yrLD0ljmDY7w8-P9VdlNxycXm5MY5DI/gviz/tq?tqx=out:csv"
+
 
 def get_df(file_path):
     """Returns a Pandas DataFrame that is found at the 'file_path'
@@ -40,6 +44,52 @@ def get_df(file_path):
     b = requests.get(urllib.parse.urljoin(base_url, file_path)).content
     df = pd.read_pickle(io.BytesIO(b), compression="bz2")
     return df
+
+
+def _fetch_gsheet_overrides():
+    """Fetch utility rate overrides from Google Sheets. Returns a DataFrame indexed by ID."""
+    resp = requests.get(GSHEET_OVERRIDES_URL, timeout=15)
+    resp.raise_for_status()
+
+    df = pd.read_csv(io.StringIO(resp.text))
+
+    # Clean dollar signs and commas from all numeric columns
+    value_cols = (
+        ['PCE', 'CustomerChg', 'DemandCharge']
+        + [f'kWh{i}' for i in range(1, 6)]
+        + [f'Rate{i}' for i in range(1, 6)]
+    )
+    for col in value_cols:
+        if col in df.columns:
+            df[col] = df[col].astype(str).str.replace('$', '', regex=False).str.replace(',', '', regex=False)
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+
+    df['ID'] = pd.to_numeric(df['ID'], errors='coerce')
+    df = df.dropna(subset=['ID'])
+    df['ID'] = df['ID'].astype(int)
+    df.set_index('ID', inplace=True)
+
+    return df
+
+
+def _apply_overrides(df_util, df_overrides):
+    """Apply spreadsheet overrides to df_util in place."""
+    for util_id, row in df_overrides.iterrows():
+        if util_id not in df_util.index:
+            print(f"Override ID {util_id} not found in df_util, skipping.")
+            continue
+
+        # Override scalar columns
+        for col in ['PCE', 'CustomerChg', 'DemandCharge']:
+            df_util.at[util_id, col] = row[col]
+
+        # Build Blocks list of tuples; blank values remain as NaN
+        blocks = []
+        for i in range(1, 6):
+            kwh = row.get(f'kWh{i}', np.nan)
+            rate = row.get(f'Rate{i}', np.nan)
+            blocks.append((kwh, rate))
+        df_util.at[util_id, 'Blocks'] = blocks
 
 
 # -----------------------------------------------------------------
@@ -198,6 +248,20 @@ def refresh_data():
     # Change the Efficiency choices column into a Python list (it is a string
     # right now.)
     df_fuel["effic_choices"] = df_fuel.effic_choices.apply(eval)
+
+    # Apply Google Sheets overrides to utility rate data
+    try:
+        df_overrides = _fetch_gsheet_overrides()
+        _apply_overrides(df_util, df_overrides)
+        print(f"Applied {len(df_overrides)} utility rate overrides from Google Sheets.")
+    except Exception as e:
+        print(f"Warning: Failed to fetch/apply utility rate overrides: {e}")
+
+    # Clear lru_caches since underlying data has changed
+    city_from_id.cache_clear()
+    util_from_id.cache_clear()
+    fuel_from_id.cache_clear()
+    fuel_price.cache_clear()
 
 
 def periodically_refresh_data():
