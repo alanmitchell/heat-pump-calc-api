@@ -33,7 +33,7 @@ base_url = "https://github.com/alanmitchell/akwlib-export/raw/main/data/v01/"
 LIB_TIMEOUT = 6.0  # units are Hours
 
 # URL for fetching utility rate overrides from a Google Sheets spreadsheet
-GSHEET_OVERRIDES_URL = "https://docs.google.com/spreadsheets/d/1vWYfVsTmfAZ5yrLD0ljmDY7w8-P9VdlNxycXm5MY5DI/gviz/tq?tqx=out:csv"
+GSHEET_OVERRIDES_URL = "https://docs.google.com/spreadsheets/d/1L-ThmQlbTzoLcq0XpVEipvXxXIvZtseoKDebmIbQv8I/gviz/tq?tqx=out:csv"
 
 
 def get_df(file_path):
