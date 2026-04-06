@@ -30,7 +30,7 @@ base_url = "https://github.com/alanmitchell/akwlib-export/raw/main/data/v01/"
 
 # This constant controls how frequently the library goes back to the GitHub server to
 # download the freshest AkWarm data.
-LIB_TIMEOUT = 12.0  # units are Hours
+LIB_TIMEOUT = 6.0  # units are Hours
 
 # URL for fetching utility rate overrides from a Google Sheets spreadsheet
 GSHEET_OVERRIDES_URL = "https://docs.google.com/spreadsheets/d/1vWYfVsTmfAZ5yrLD0ljmDY7w8-P9VdlNxycXm5MY5DI/gviz/tq?tqx=out:csv"
@@ -73,7 +73,8 @@ def _fetch_gsheet_overrides():
 
 
 def _apply_overrides(df_util, df_overrides):
-    """Apply spreadsheet overrides to df_util in place."""
+    """Apply spreadsheet overrides to df_util in place. Returns count of applied overrides."""
+    applied = 0
     for util_id, row in df_overrides.iterrows():
         if util_id not in df_util.index:
             print(f"Override ID {util_id} not found in df_util, skipping.")
@@ -90,6 +91,9 @@ def _apply_overrides(df_util, df_overrides):
             rate = row.get(f'Rate{i}', np.nan)
             blocks.append((kwh, rate))
         df_util.at[util_id, 'Blocks'] = blocks
+        applied += 1
+
+    return applied
 
 
 # -----------------------------------------------------------------
@@ -252,8 +256,8 @@ def refresh_data():
     # Apply Google Sheets overrides to utility rate data
     try:
         df_overrides = _fetch_gsheet_overrides()
-        _apply_overrides(df_util, df_overrides)
-        print(f"Applied {len(df_overrides)} utility rate overrides from Google Sheets.")
+        applied = _apply_overrides(df_util, df_overrides)
+        print(f"Applied {applied} utility rate overrides from Google Sheets.")
     except Exception as e:
         print(f"Warning: Failed to fetch/apply utility rate overrides: {e}")
 
