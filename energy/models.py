@@ -200,6 +200,7 @@ class TimePeriodResults(BaseModel):
 
     # CO2 emissions due to the fuel use for the period
     co2_lbs: float    # pounds of CO2 emitted from building fuel use
+    co2_lbs_by_fuel: dict[Fuel_id, float]  # CO2 lbs broken down by fuel type
 
 
 class DetailedModelResults(BaseModel):

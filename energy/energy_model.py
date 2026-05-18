@@ -324,6 +324,7 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
     fuel_cost_all = []
     fuel_total_cost_all = []
     co2_all = []
+    co2_by_fuel_all = []
 
     # Prepare some values and objects that are fixed across all months
 
@@ -520,17 +521,20 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
 
         # Tracks CO2 pounds of emissions
         co2_lbs = 0.0
+        co2_lbs_by_fuel = {}
 
         # fuel MMBTU by fuel type
         fuel_mmbtu_by_type = fuel_use_mmbtu.sum_key1()
         for fuel_id, mmbtu in fuel_mmbtu_by_type.items():
 
             if fuel_id == Fuel_id.elec:
-                co2_lbs += mmbtu / 0.003412 * elec_util.CO2
-
+                fuel_co2 = mmbtu / 0.003412 * elec_util.CO2
             else:
                 fuel_info = lib.fuel_from_id(fuel_id)
-                co2_lbs += mmbtu * fuel_info.co2
+                fuel_co2 = mmbtu * fuel_info.co2
+
+            co2_lbs += fuel_co2
+            co2_lbs_by_fuel[fuel_id] = fuel_co2
 
 
         # ---- Add to the arrays tracking monthly values
@@ -539,6 +543,7 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
         fuel_cost_all.append(fuel_cost_by_type)
         fuel_total_cost_all.append(fuel_total_cost)
         co2_all.append(co2_lbs)
+        co2_by_fuel_all.append(co2_lbs_by_fuel)
 
     dfm['fuel_use_mmbtu'] = fuel_use_mmbtu_all
     dfm['elec_demand'] = elec_demand_all
@@ -546,6 +551,7 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
     dfm['fuel_cost'] = fuel_cost_all
     dfm['fuel_total_cost'] = fuel_total_cost_all
     dfm['co2_lbs'] = co2_all
+    dfm['co2_lbs_by_fuel'] = co2_by_fuel_all
 
     # Add in a column to report the period being summarized
     dfm["period"] = [
@@ -623,6 +629,7 @@ def monthly_to_annual_results(df_monthly: pd.DataFrame) -> pd.Series:
 
     # fuel cost dictionary by fuel type
     annual['fuel_cost'] = sum_dicts(df_monthly.fuel_cost.values)
+    annual['co2_lbs_by_fuel'] = sum_dicts(df_monthly.co2_lbs_by_fuel.values)
 
     # add the period column back in
     annual["period"] = "Annual"
