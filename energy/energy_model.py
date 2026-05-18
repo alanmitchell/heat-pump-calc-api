@@ -313,7 +313,10 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
 
     # split conventional load across primary, secondary systems
     dfm["conventional_load_mmbtu_primary"] = inp.conventional_heat[0].frac_load_served * dfm.conventional_load_mmbtu
-    dfm["conventional_load_mmbtu_secondary"] = inp.conventional_heat[1].frac_load_served * dfm.conventional_load_mmbtu
+    if inp.conventional_heat[1] is not None:
+        dfm["conventional_load_mmbtu_secondary"] = inp.conventional_heat[1].frac_load_served * dfm.conventional_load_mmbtu
+    else:
+        dfm["conventional_load_mmbtu_secondary"] = 0.0
 
     # --------------------- MONTHLY LOOP ---------------------------
     # Loop across months to calculate fuel use by end use in each month. Build up arrays
@@ -364,7 +367,7 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
     # building, except electricity
     fuels_used = set([
         inp.conventional_heat[0].heat_fuel_id,
-        inp.conventional_heat[1].heat_fuel_id,
+        inp.conventional_heat[1].heat_fuel_id if inp.conventional_heat[1] is not None else None,
         inp.dhw_fuel_id,
         inp.clothes_drying_fuel_id,
         inp.cooking_fuel_id
@@ -436,6 +439,8 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
         for i in range(2):
 
             htg_sys = inp.conventional_heat[i]
+            if htg_sys is None:
+                continue
 
             # get fuel information for this system
             fuel_id = htg_sys.heat_fuel_id
