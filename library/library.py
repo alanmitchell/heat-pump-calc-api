@@ -35,6 +35,11 @@ LIB_TIMEOUT = 6.0  # units are Hours
 # URL for fetching utility rate overrides from a Google Sheets spreadsheet
 GSHEET_OVERRIDES_URL = "https://docs.google.com/spreadsheets/d/1L-ThmQlbTzoLcq0XpVEipvXxXIvZtseoKDebmIbQv8I/gviz/tq?tqx=out:csv"
 
+# URL for the sheet (in the same spreadsheet) that lists the City IDs of cities
+# where electricity is exempt from sales tax. The sheet must be named
+# 'ElecSalesTaxExempt' and have a 'CityID' column.
+GSHEET_ELEC_TAX_EXEMPT_URL = GSHEET_OVERRIDES_URL + "&sheet=ElecSalesTaxExempt"
+
 
 def get_df(file_path):
     """Returns a Pandas DataFrame that is found at the 'file_path'
@@ -70,6 +75,18 @@ def _fetch_gsheet_overrides():
     df.set_index('ID', inplace=True)
 
     return df
+
+
+def _fetch_elec_tax_exempt_ids():
+    """Fetch the set of City IDs where electricity is exempt from sales tax,
+    from the 'ElecSalesTaxExempt' sheet of the overrides Google Sheets spreadsheet.
+    """
+    resp = requests.get(GSHEET_ELEC_TAX_EXEMPT_URL, timeout=15)
+    resp.raise_for_status()
+
+    df = pd.read_csv(io.StringIO(resp.text))
+    ids = pd.to_numeric(df['CityID'], errors='coerce').dropna().astype(int)
+    return set(ids)
 
 
 def _apply_overrides(df_util, df_overrides):
@@ -119,6 +136,13 @@ def city_from_id(city_id) -> City:
     city_dict = nan_to_none(city_dict)
     city_dict["id"] = city_id
     return City(**city_dict)
+
+
+def elec_sales_tax_exempt(city_id) -> bool:
+    """Returns True if electricity is exempt from sales tax in the city
+    identified by 'city_id'.
+    """
+    return city_id in elec_tax_exempt_city_ids
 
 
 # --------------------------------------------------------------------------------------
@@ -217,6 +241,7 @@ def refresh_data():
     global df_city
     global df_util
     global df_fuel
+    global elec_tax_exempt_city_ids
     global last_lib_download_ts  # tracks time of last refresh
 
     print("acquiring library data...")
@@ -261,6 +286,15 @@ def refresh_data():
     except Exception as e:
         print(f"Warning: Failed to fetch/apply utility rate overrides: {e}")
 
+    # Fetch the list of cities where electricity is exempt from sales tax.
+    # On failure, keep the previously-fetched set.
+    try:
+        elec_tax_exempt_city_ids = _fetch_elec_tax_exempt_ids()
+        print(f"Fetched {len(elec_tax_exempt_city_ids)} electricity sales-tax-exempt cities from Google Sheets.")
+        print(elec_tax_exempt_city_ids)
+    except Exception as e:
+        print(f"Warning: Failed to fetch electricity sales-tax-exempt cities: {e}")
+
     # Clear lru_caches since underlying data has changed
     city_from_id.cache_clear()
     util_from_id.cache_clear()
@@ -289,6 +323,8 @@ df_tmy_meta = None
 df_city = None
 df_util = None
 df_fuel = None
+# Set of City IDs for cities where electricity is exempt from sales tax.
+elec_tax_exempt_city_ids = set()
 
 # start a thread to refresh data periodically
 thread = threading.Thread(target=periodically_refresh_data)

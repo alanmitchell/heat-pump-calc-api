@@ -357,9 +357,13 @@ def model_building(inp: BuildingDescription) -> DetailedModelResults:
     if prices.co2_lbs_per_kwh_override is not None:
         elec_util.CO2 = prices.co2_lbs_per_kwh_override
 
+    # In some cities, electric utilities are exempt from sales tax, so use a
+    # zero sales tax for the electric cost calculation in those cities.
+    elec_sales_tax = 0.0 if lib.elec_sales_tax_exempt(inp.city_id) else sales_tax
+
     # Create the object that does the actual electric utility cost calculations
     elec_cost_calc = ElecCostCalc(
-        elec_util, sales_tax=sales_tax, pce_limit=prices.pce_limit
+        elec_util, sales_tax=elec_sales_tax, pce_limit=prices.pce_limit
     )
 
     # Create a dictionary keyed on fuel type that gives the fuel price
