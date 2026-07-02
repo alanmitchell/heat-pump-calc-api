@@ -135,6 +135,7 @@ def city_from_id(city_id) -> City:
     # do the following to replace NaN's with None
     city_dict = nan_to_none(city_dict)
     city_dict["id"] = city_id
+    city_dict["elec_sales_tax_exempt"] = elec_sales_tax_exempt(city_id)
     return City(**city_dict)
 
 

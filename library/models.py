@@ -56,6 +56,7 @@ class City(BaseModel):
     ancsa_region: str  # ANCSA region
     railbelt: str  # 'Railbelt' if city is in Railbelt, otherwise 'Affordable Energy Strategy Area'
     hub: bool  # True if a regional hub city
+    elec_sales_tax_exempt: bool = False  # True if electricity is exempt from sales tax in this city
     avg_elec_usage: List[float] = [
         0.0
     ] * 12  # 12-item array of average residential kWh usage for each month
