@@ -1,3 +1,9 @@
+"""
+Script for running test cases of COP and max capacity for various heat
+pump configurations.  Run in the root project directory with:
+
+    uv run test-cop-capacity.py
+"""
 from typing import Tuple
 
 import numpy as np
